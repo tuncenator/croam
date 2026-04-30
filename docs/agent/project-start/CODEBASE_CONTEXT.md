@@ -3,7 +3,7 @@
 > **Living document** -- each phase updates this with new discoveries and changes.
 > Read this before exploring the codebase. It may already have what you need.
 >
-> Last updated by: Phase 0 - Initial Setup (2026-04-30)
+> Last updated by: Checkpoint 1 - Phase 1 Foundation (2026-04-30)
 
 ---
 
@@ -17,7 +17,7 @@ croam is a Python 3.11+ CLI built around three orthogonal concerns:
 
 The shim is a separate concern: a thin wrapper around `claude` invoked as `croam launch` (or via the user's `claude` alias) that decides whether to launch inside a tmux session named `claude-<sid>`.
 
-This is a greenfield project. The full design lives at `docs/specs/2026-04-30-croam-design.md`. As of this writing, no Python code exists -- only the spec and these agent docs. Phase 1 establishes the project skeleton (pyproject.toml, src/croam/ tree, test harness, logging).
+The full design lives at `docs/specs/2026-04-30-croam-design.md`. Phase 1 established the project skeleton (pyproject.toml, src/croam/ tree, test harness, logging). The project is now a runnable Python package with `uv sync` and `uv run croam --help`.
 
 ---
 
@@ -30,10 +30,12 @@ This is a greenfield project. The full design lives at `docs/specs/2026-04-30-cr
 | `docs/specs/2026-04-30-croam-design.md` | Original design spec, sections 1-16 | Read for big-picture intent. Do NOT modify. |
 | `docs/agent/project-start/PROJECT_PLAN.md` | Phase overview, architecture, cross-cutting concerns | Read once at the start of a phase. |
 | `docs/agent/project-start/FUNCTIONAL_QA_STRATEGY.md` | Surfaces, user loops, anti-patterns, harness deliverables | Read in full when planning Functional QA checks. |
-| `pyproject.toml` | Project metadata, dependencies, console-script entry | Created in Phase 1. |
-| `src/croam/__init__.py` | Package marker | Created in Phase 1. |
-| `src/croam/cli.py` | typer entry point (`app`); `croam.cli:app` is the console script | Created in Phase 6. |
-| `src/croam/log.py` | `configure(level, log_file)` for loguru | Created in Phase 1. |
+| `pyproject.toml` | Project metadata, deps (typer, loguru), console script `croam = "croam.cli:app"`, tool configs (ruff, pyright, pytest) | Phase 1. |
+| `src/croam/__init__.py` | Package marker (empty) | Phase 1. |
+| `src/croam/cli.py` | typer stub with `@app.callback(invoke_without_command=True)`; Phase 6 replaces entirely | Phase 1 stub. |
+| `src/croam/log.py` | `configure(level, log_file, debug)` for loguru; uses FilterDict-typed filter_map for pyright compat | Phase 1. |
+| `src/croam/errors.py` | `CroamError(Exception)` base + 7 subclasses: ConfigError, SshError, OwnershipConflict, TmuxError, SessionNotFound, OrphanRefused, TimeoutError | Phase 1. |
+| `src/croam/proc.py` | `run(argv, *, timeout, check, capture, env, cwd)` subprocess wrapper with DEBUG logging and TimeoutError translation | Phase 1. |
 | `src/croam/config.py` | TOML config loader, `Config` dataclass | Created in Phase 2. |
 | `src/croam/paths.py` | cwd normalization, encoded-cwd encode/decode | Created in Phase 2. |
 | `src/croam/sessions.py` | Discover claude's `~/.claude/{projects,sessions}` and join with tmux | Created in Phase 3. |
@@ -44,9 +46,12 @@ This is a greenfield project. The full design lives at `docs/specs/2026-04-30-cr
 | `src/croam/picker.py` | fzf orchestration, row layout, multi-select intersection | Created in Phase 6. |
 | `src/croam/sync.py` | syncthing mirror access (read-only filesystem); conflict file detection | Created in Phase 9. |
 | `src/croam/doctor.py` | Diagnostics: config + SSH + syncthing + ownership consistency | Created in Phase 9. |
-| `src/croam/errors.py` | `CroamError` + subclasses | Created in Phase 1. |
-| `tests/conftest.py` | HOME redirect, fake `~/.claude`, private tmux socket, SSH shim, dummy session loader | Created in Phase 1. |
-| `tests/fixtures/` | Synthetic session JSONLs, ownership.json snapshots, sample TOML configs | Created across Phase 1, 4, 7. |
+| `tests/conftest.py` | 5 fixtures (home, tmux_socket, ssh_shim, state_root, e2e_dummy) + `pytest_runtest_call` hookwrapper safety guard | Phase 1. |
+| `tests/_helpers/synth_jsonl.py` | `build_jsonl(home, sid, cwd)` with inlined `_encode_cwd` (standalone, no src/ deps) | Phase 1. |
+| `tests/_helpers/synth_session.py` | `build_session_metadata(home, pid, sid, cwd)` | Phase 1. |
+| `tests/_helpers/fake_ssh.py` | `SSH_SHIM_SCRIPT` + `fixture_path_for()` for argv-hashed fixture lookup | Phase 1. |
+| `tests/test_smoke.py` | 14 smoke tests covering all fixtures, log, errors, proc, safety guard | Phase 1. |
+| `tests/fixtures/` | Synthetic session JSONLs, ownership.json snapshots, sample TOML configs | Created across Phase 4, 7. |
 
 ---
 
@@ -54,7 +59,7 @@ This is a greenfield project. The full design lives at `docs/specs/2026-04-30-cr
 
 > Will be populated as phases ship them. Documenting key signatures here saves future agents from re-reading source files.
 
-### Phase 1 deliverables (placeholder signatures, finalized in Phase 1)
+### Phase 1 deliverables (finalized)
 
 ```python
 # src/croam/log.py
@@ -62,12 +67,18 @@ def configure(level: str = "INFO", log_file: Path | None = None, debug: bool = F
 
 # src/croam/errors.py
 class CroamError(Exception): ...
-class ConfigError(CroamError): ...
+class ConfigError(CroamError): ...   # field: str | None, reason: str | None
 class SshError(CroamError): ...
 class OwnershipConflict(CroamError): ...
 class TmuxError(CroamError): ...
 class SessionNotFound(CroamError): ...
 class OrphanRefused(CroamError): ...
+class TimeoutError(CroamError): ...  # argv: list[str] | None, timeout_s: float | None
+
+# src/croam/proc.py
+def run(argv: list[str], *, timeout: float | None = None, check: bool = False,
+        capture: bool = True, env: dict[str, str] | None = None,
+        cwd: Path | str | None = None) -> subprocess.CompletedProcess[str]: ...
 ```
 
 ### Phase 2 (paths and config)
@@ -211,6 +222,10 @@ Each `src/croam/<module>.py` exposes a small, well-typed public API. Internal he
 - SSH timeouts are NOT errors -- they are reachability=False signals. Catch `subprocess.TimeoutExpired`, set `reachable=False`, continue.
 - Use `os.replace()` for atomic file writes. Never write directly with `open(..., 'w')` for state files (`ownership.json`, etc.) because syncthing or another croam process may read mid-write.
 - Always validate config at load time and raise `ConfigError` with a clear field-naming message.
+
+### Safety guard
+
+The conftest safety guard is a `pytest_runtest_call` hookwrapper (not an autouse fixture). It fires after all fixture setup completes, so by the time it checks HOME, the `home` fixture has already redirected it via monkeypatch. The guard logic is extracted into `_check_home_redirected(home, e2e)` for testability. Tests that don't use `home` must still be aware the guard will fire and reject them if HOME isn't redirected.
 
 ### Dependency injection
 
@@ -389,7 +404,7 @@ This is a critical correction to the spec section 11 which said "slashes to dash
   - `tmux_socket` fixture: `tmp_path / "tmux.sock"` (private to the test)
   - `ssh_shim` fixture: temp dir prepended to `PATH` containing a fake `ssh` script that emits canned output keyed off argv
   - `e2e_dummy` fixture: gated on `CROAM_E2E=1` env var; provides the path to the real dummy session at `/tmp/croam-e2e/` and the captured sid `[DUMMY_SID]`
-  - **Conftest guard**: an autouse fixture that asserts `os.environ["HOME"] != Path.home()` (i.e., HOME has been redirected) UNLESS `CROAM_E2E=1` is set. This prevents accidental contamination of the user's real `~/.claude` if a test forgets to use the `home` fixture.
+  - **Conftest guard**: a `pytest_runtest_call` hookwrapper that checks `os.environ["HOME"]` starts with `/tmp/` (i.e., HOME has been redirected) UNLESS `CROAM_E2E=1` is set. Fires after all fixture setup, so the `home` fixture redirects before the guard checks. Prevents accidental contamination of the user's real `~/.claude` if a test forgets to use the `home` fixture.
 
 ### Logging
 
@@ -444,7 +459,7 @@ Two tiers, gated by `CROAM_E2E` env var:
 ## Notes for Future Phases
 
 - **Phase 1**: must establish the conftest guard. If you forget it, every subsequent phase risks corrupting the user's real `~/.claude`.
-- **Phase 2**: when implementing `decode_cwd`, don't try to invert `encode_cwd` algebraically -- it is lossy. Probe the filesystem.
+- **Phase 2**: when implementing `decode_cwd`, don't try to invert `encode_cwd` algebraically -- it is lossy. Probe the filesystem. Also: `tests/_helpers/synth_jsonl.py` has a standalone `_encode_cwd` copy. Phase 2's `test_paths.py` should verify `paths.encode_cwd` matches `synth_jsonl._encode_cwd` for representative paths. Do NOT replace synth_jsonl's copy with an import from `src/croam/paths.py` -- the helper stays dependency-free.
 - **Phase 3**: the join between `~/.claude/projects/<encoded>/<sid>.jsonl` and `~/.claude/sessions/<PID>.json` is by `sessionId`. Multiple PIDs can share a sessionId (rare; multiple resumes). Pick the one with the highest `updatedAt`.
 - **Phase 5**: tests must always pass an explicit socket via `-S` to keep tmux operations isolated.
 - **Phase 6**: picker rows have hidden filter columns (1, 3, 4, 5) that `--with-nth=2,6,7,8,9` excludes from display but fzf still searches. Use `$FZF_SELECT_COUNT` (NOT `FZF_SELECTED_COUNT` -- the manpage spells it without the ED) for the multi-select header transform.
