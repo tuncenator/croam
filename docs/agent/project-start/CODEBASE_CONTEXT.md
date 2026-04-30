@@ -81,35 +81,79 @@ def run(argv: list[str], *, timeout: float | None = None, check: bool = False,
         cwd: Path | str | None = None) -> subprocess.CompletedProcess[str]: ...
 ```
 
-### Phase 2 (paths and config)
+### Phase 2 (paths and config) -- FINALIZED
 
 ```python
 # src/croam/paths.py
-def encode_cwd(absolute_cwd: str | Path) -> str:
-    """Convert /tmp/croam-e2e -> -tmp-croam-e2e (each / and . -> -, applied per-segment).
-    See 'Encoded-cwd convention' below for the exact rules and the lossy-decode caveat.
+def encode_cwd(cwd: Path | str) -> str:
+    """Encode an absolute path to claude's encoded-cwd format.
+    Each `/` separator and each leading `.` in a path component becomes `-`.
+    Raises ValueError for relative paths.
     """
 
-def decode_cwd(encoded: str, host_home: Path | None = None) -> Path:
-    """Best-effort decode. Probes the filesystem when ambiguous (paths containing '-')."""
+def decode_cwd(encoded: str, host_home: Path | None = None, fs_probe: bool = True) -> Path:
+    """Best-effort decode. With fs_probe=True probes the filesystem; uses known-prefix
+    shortcut when host_home is provided (handles paths with many literal dashes).
+    Raises ConfigError(field='encoded_cwd') for missing leading '-' or no match found.
+    """
 
-def normalize_cwd(absolute_cwd: Path, host_home: Path) -> str:
-    """Return ~/Programs/foo if cwd is under host_home; absolute string otherwise."""
+def normalize_cwd(cwd: Path, host_home: Path) -> str:
+    """Return ~/relative if cwd is under host_home, else absolute string.
+    Returns '~' (no trailing slash) when cwd == host_home.
+    Raises ValueError for relative cwd.
+    """
 
-# src/croam/config.py
+def denormalize_cwd(normalized: str, host_home: Path) -> Path:
+    """Inverse of normalize_cwd. '~' or '~/...' -> host_home/rest. Absolute as-is.
+    Raises ValueError for ~user/... paths.
+    """
+
+# src/croam/config.py -- seven frozen dataclasses
+@dataclass(frozen=True)
+class HostEntry:
+    name: str; ssh: str; home: Path | None = None; sync: bool = True
+
+@dataclass(frozen=True)
+class StorageConfig:
+    state_root: Path
+
+@dataclass(frozen=True)
+class DiscoveryConfig:
+    mode: Literal["syncthing", "ssh", "hybrid"]
+
+@dataclass(frozen=True)
+class OwnershipConfig:
+    claim_verify: Literal["local", "ssh-strict"]
+
+@dataclass(frozen=True)
+class PickerConfig:
+    default_filter: Literal["exact-pwd", "project-root"]
+    last_window_days: int
+
+@dataclass(frozen=True)
+class ShimConfig:
+    enabled: bool
+    opt_out_env: str
+
 @dataclass(frozen=True)
 class Config:
     self_hostname: str
-    hosts: dict[str, HostEntry]
-    state_root: Path
-    discovery_mode: Literal["syncthing", "ssh", "hybrid"]
-    claim_verify: Literal["local", "ssh-strict"]
-    picker_default_filter: Literal["exact-pwd", "project-root"]
-    picker_last_window_days: int
-    shim_enabled: bool
-    shim_opt_out_env: str
+    hosts: dict[str, HostEntry]   # treat as read-only; mutable by language but convention is immutable
+    storage: StorageConfig
+    discovery: DiscoveryConfig
+    ownership: OwnershipConfig
+    picker: PickerConfig
+    shim: ShimConfig
 
-def load_config(path: Path = Path("~/.config/croam/config.toml").expanduser()) -> Config: ...
+def load_config(path: Path | None = None) -> Config:
+    """Load from path (default ~/.config/croam/config.toml via os.path.expanduser).
+    Raises ConfigError(field=...) for missing file or schema violations.
+    """
+
+def bootstrap_config(path: Path) -> Config:
+    """Write skeleton TOML (nodename from os.uname()), mode 0o600, atomic via tmp->replace.
+    Returns load_config(path).
+    """
 ```
 
 ### Phase 3 (sessions and host probes)
