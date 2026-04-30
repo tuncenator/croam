@@ -186,15 +186,19 @@ Each host maintains:
 - `~/.claude/sessions/*.json` - claude-native, contains `pid`, `procStart`, `cwd`, `status` etc. for currently-running sessions on this host. Host-local; PID etc. only meaningful on origin.
 - `~/.claude/projects/<encoded-cwd>/<sid>.jsonl` - claude-native conversation transcripts. Authoritative content for each session.
 
-croam adds (paths follow XDG; in syncthing mode, state files live under the host's subtree of `shared_root` instead, see section 9):
+croam adds three state files. Their location is controlled by a single `state_root` config item:
 
-- `<state>/ownership.json` - per-host assertions about session ownership. Each host writes only its own.
-- `<state>/lineage.json` - per-host fork lineage. Maps `<fork-sid>` to `{parent_sid, fork_n}`. Read at picker render time to compose the `[abc123-F#1]` display tag.
-- `<state>/host-cache.json` - last-known state of each peer (last seen reachable, last sync activity), used for the LAST column on unreachable hosts.
+- `<state_root>/<HOSTNAME>/ownership.json` - per-host assertions about session ownership. Each host writes only its own.
+- `<state_root>/<HOSTNAME>/lineage.json` - per-host fork lineage. Maps `<fork-sid>` to `{parent_sid, fork_n}`. Read at picker render time to compose the `[abc123-F#1]` display tag.
+- `<state_root>/<HOSTNAME>/host-cache.json` - last-known state of each peer (last seen reachable, last sync activity), used for the LAST column on unreachable hosts.
 
-Where `<state>` resolves to:
-- ssh-only mode: `~/.local/share/croam/`
-- syncthing or hybrid mode: `<shared_root>/<HOSTNAME>/` (so other hosts can read it via the mirror)
+`state_root` defaults to `~/.local/share/croam` (XDG state dir). Users with syncthing override it to a path under their syncthing share, e.g., `~/Sync/croam`. The layout is uniform regardless of mode: each host writes to its own hostname subdir, peers live as sibling subdirs.
+
+Mode (`syncthing` / `ssh` / `hybrid`) only affects where *peer* state is read from at query time:
+- syncthing/hybrid: read peer subdirs directly from local filesystem (the mirror).
+- ssh: peers' subdirs do not exist locally; their state is fetched via SSH on demand (`ssh PEER croam --emit-state`).
+
+Configuring `state_root` to point inside a syncthing share is what activates offline-capable mirroring. croam itself does not manage syncthing; it just expects the chosen path to be replicated by whatever the user has set up.
 
 Config (read-only after load) lives at `~/.config/croam/config.toml` regardless of mode.
 
@@ -324,15 +328,16 @@ mode = "syncthing"  # "syncthing" | "ssh" | "hybrid"
 
 ### Syncthing mode
 
-Each host's metadata (ownership.json, lineage.json) and JSONLs are mirrored under a configured shared root, e.g., `~/Sync/croam/<HOSTNAME>/...`. Other hosts read the local mirror for offline visibility. Online hosts can additionally be SSH-queried for live data when ssh-strict is enabled.
+`state_root` is set to a path under the user's syncthing share (e.g., `~/Sync/croam`). Each host writes to its own hostname subdir; syncthing replicates these subdirs to peers. Other hosts read the local mirror for offline visibility. Online hosts can additionally be SSH-queried for live data when ssh-strict is enabled.
 
-Layout under shared root:
+Layout under `state_root`:
 
 ```
-~/Sync/croam/
+<state_root>/             # e.g., ~/Sync/croam
   stormtree/
     ownership.json
     lineage.json
+    host-cache.json
     projects/
       home-tunc-Programs-onlayer-x/
         abc12345-...jsonl
@@ -341,11 +346,11 @@ Layout under shared root:
     ...
 ```
 
-Each host's local Claude data is mirrored to its own subtree (via a watchdog rsync, inotify-driven, or symlinking - implementation choice in the code phase).
+Each host's local Claude data (`~/.claude/projects/...`) is mirrored into its own subtree under `state_root` (via a watchdog rsync, inotify-driven, or symlinking - implementation choice in the code phase). croam itself does not manage syncthing; the user configures syncthing to replicate `state_root` across their hosts.
 
 ### SSH-only mode
 
-No shared filesystem. All cross-host operations fan out parallel SSH:
+`state_root` defaults to `~/.local/share/croam` (XDG state dir). The local hostname subdir exists, but no peer subdirs - peers are not replicated to this host. All cross-host operations fan out parallel SSH:
 
 - `croam ls` -> `ssh HOST croam --emit-state` per configured host, merged client-side.
 - Offline hosts simply do not contribute. Their sessions are invisible until they come back online.
@@ -402,11 +407,15 @@ ssh = "corpsefire"
 home = "/home/tunc"
 sync = true
 
-[discovery]
-mode = "syncthing"
+[storage]
+# Where this host writes its own state (under <state_root>/<HOSTNAME>/)
+# and reads peers' states from (in syncthing/hybrid mode).
+# Default: ~/.local/share/croam
+# Override to a syncthing-replicated path to enable mirror mode:
+state_root = "~/Sync/croam"
 
-[discovery.syncthing]
-shared_root = "~/Sync/croam"
+[discovery]
+mode = "syncthing"           # "syncthing" | "ssh" | "hybrid"
 
 [ownership]
 claim_verify = "ssh-strict"  # "local" | "ssh-strict"
