@@ -130,7 +130,7 @@ def _generate_candidates(encoded: str, host_home: Path | None = None) -> Iterato
         home_encoded = encode_cwd(host_home)
         if encoded.startswith(home_encoded):
             # The suffix after the home prefix
-            suffix = encoded[len(home_encoded):]
+            suffix = encoded[len(home_encoded) :]
             if suffix == "":
                 # Encoded is exactly host_home
                 p = host_home
@@ -251,7 +251,5 @@ def denormalize_cwd(normalized: str, host_home: Path) -> Path:
     if normalized.startswith("~/"):
         return Path(host_home) / normalized[2:]
     if normalized.startswith("~"):
-        raise ValueError(
-            f"denormalize_cwd does not support ~user/... paths; got {normalized!r}"
-        )
+        raise ValueError(f"denormalize_cwd does not support ~user/... paths; got {normalized!r}")
     return Path(normalized)

@@ -19,6 +19,7 @@ from tests._helpers.synth_jsonl import _encode_cwd as synth_encode_cwd
 # Test 1: encode_cwd against verified examples from the spec table
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "input_path, expected",
     [
@@ -42,6 +43,7 @@ def test_encode_examples(home: Path, input_path: str, expected: str) -> None:
 # Test 2: dot-segment encoding for leading-dot components
 # ---------------------------------------------------------------------------
 
+
 def test_encode_dot_segment(home: Path) -> None:
     """Leading-dot components have their dot replaced by '-'."""
     assert encode_cwd("/x/.claude") == "-x--claude"
@@ -55,6 +57,7 @@ def test_encode_dot_segment(home: Path) -> None:
 # Test 3: double-slash input is collapsed by Path
 # ---------------------------------------------------------------------------
 
+
 def test_encode_double_slash_collapsed(home: Path) -> None:
     """Double slashes are collapsed by Path.parts; single dash between segments."""
     assert encode_cwd(Path("/foo//bar")) == "-foo-bar"
@@ -63,6 +66,7 @@ def test_encode_double_slash_collapsed(home: Path) -> None:
 # ---------------------------------------------------------------------------
 # Test 4: relative path raises ValueError
 # ---------------------------------------------------------------------------
+
 
 def test_encode_relative_path_raises(home: Path) -> None:
     """encode_cwd raises ValueError for relative paths (programmer error)."""
@@ -73,6 +77,7 @@ def test_encode_relative_path_raises(home: Path) -> None:
 # ---------------------------------------------------------------------------
 # Test 5: decode with fs_probe resolves ambiguity by filesystem existence
 # ---------------------------------------------------------------------------
+
 
 def test_decode_lossy_with_fs_probe(home: Path) -> None:
     """fs_probe picks the candidate that actually exists on disk."""
@@ -86,6 +91,7 @@ def test_decode_lossy_with_fs_probe(home: Path) -> None:
 
     # Rebuild: only home/foo-bar exists
     import shutil
+
     shutil.rmtree(home / "foo")
     (home / "foo-bar").mkdir(parents=True)
     encoded_foo_dash_bar = "-" + str(home / "foo-bar").replace("/", "-")[1:]
@@ -96,6 +102,7 @@ def test_decode_lossy_with_fs_probe(home: Path) -> None:
 # ---------------------------------------------------------------------------
 # Test 6: decode without fs_probe returns deterministic best-guess
 # ---------------------------------------------------------------------------
+
 
 def test_decode_no_probe_returns_most_likely(home: Path) -> None:
     """fs_probe=False heuristic: every '--' -> '/.', every '-' -> '/'.
@@ -110,6 +117,7 @@ def test_decode_no_probe_returns_most_likely(home: Path) -> None:
 # Test 7: decode dot-segment path with fs_probe
 # ---------------------------------------------------------------------------
 
+
 def test_decode_dot_segment_with_fs_probe(home: Path) -> None:
     """Dot-segment encoded path decodes to the .dotdir path when it exists."""
     (home / ".claude" / "commands").mkdir(parents=True)
@@ -122,6 +130,7 @@ def test_decode_dot_segment_with_fs_probe(home: Path) -> None:
 # ---------------------------------------------------------------------------
 # Test 8: decode_cwd raises ConfigError for invalid input
 # ---------------------------------------------------------------------------
+
 
 def test_decode_invalid_input_raises(home: Path) -> None:
     """decode_cwd raises ConfigError when input lacks leading '-' or no path found."""
@@ -143,6 +152,7 @@ def test_decode_invalid_input_raises(home: Path) -> None:
 # Test 9: normalize_cwd under home
 # ---------------------------------------------------------------------------
 
+
 def test_normalize_under_home(home: Path) -> None:
     """normalize_cwd returns ~/relative for paths under host_home."""
     assert normalize_cwd(home / "Programs/croam", home) == "~/Programs/croam"
@@ -151,6 +161,7 @@ def test_normalize_under_home(home: Path) -> None:
 # ---------------------------------------------------------------------------
 # Test 10: normalize_cwd outside home returns absolute string
 # ---------------------------------------------------------------------------
+
 
 def test_normalize_outside_home(home: Path) -> None:
     """normalize_cwd returns absolute string for paths outside host_home."""
@@ -161,6 +172,7 @@ def test_normalize_outside_home(home: Path) -> None:
 # Test 11: normalize_cwd when cwd equals home
 # ---------------------------------------------------------------------------
 
+
 def test_normalize_equals_home(home: Path) -> None:
     """normalize_cwd returns '~' (no trailing slash) when cwd == host_home."""
     assert normalize_cwd(home, home) == "~"
@@ -169,6 +181,7 @@ def test_normalize_equals_home(home: Path) -> None:
 # ---------------------------------------------------------------------------
 # Test 12: denormalize_cwd round-trip
 # ---------------------------------------------------------------------------
+
 
 def test_denormalize_round_trip(home: Path) -> None:
     """denormalize_cwd(normalize_cwd(p)) == p for paths under home."""
@@ -181,6 +194,7 @@ def test_denormalize_round_trip(home: Path) -> None:
 # Test 13: denormalize_cwd with absolute path
 # ---------------------------------------------------------------------------
 
+
 def test_denormalize_absolute(home: Path) -> None:
     """denormalize_cwd returns Path(normalized) unchanged for absolute paths."""
     assert denormalize_cwd("/tmp/foo", home) == Path("/tmp/foo")
@@ -189,6 +203,7 @@ def test_denormalize_absolute(home: Path) -> None:
 # ---------------------------------------------------------------------------
 # Cross-verification: encode_cwd matches synth_jsonl._encode_cwd
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize(
     "path_str",
@@ -207,6 +222,7 @@ def test_encode_matches_synth_jsonl(home: Path, path_str: str) -> None:
 # ---------------------------------------------------------------------------
 # Coverage helpers -- exercise internal branches not covered by spec tests
 # ---------------------------------------------------------------------------
+
 
 def test_decode_no_probe_dot_segment(home: Path) -> None:
     """_no_probe_best_guess handles '--' (dot-prefix) correctly."""
@@ -277,6 +293,7 @@ def test_normalize_relative_raises(home: Path) -> None:
 # ---------------------------------------------------------------------------
 # Test 14: Tier 2 -- e2e dummy encoding confirmed against real ~/.claude/projects
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.skipif(not os.environ.get("CROAM_E2E"), reason="needs real claude")
 def test_e2e_dummy_encoding(e2e_dummy: tuple[Path, str]) -> None:
