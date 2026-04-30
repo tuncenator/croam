@@ -77,13 +77,31 @@
 
 ## Code Review Results
 
-> Pending code review.
+**Result**: REVIEW FAILED (2 Important, 4 Minor)
+**Reviewer**: spark-code-reviewer (claude-opus-4-6), 2026-04-30
+**Diff range**: `08fb31c891d7ecf70a0c662ba2683200500cbb5b..bf9c6b1ae01c5066fbf88740c40a878e3e380f94`
+
+### Issues
+
+| Severity | Area | Finding |
+|----------|------|---------|
+| Important | tests/test_picker.py:304-317 | `test_launch_picker_cancel` and `test_launch_picker_no_match` pass `rows=[]`, hitting picker.py:258 short-circuit before subprocess launch. The actual `rc=130` (cancel) and `rc=1` (no-match) branches at picker.py:284-285 are untested. Fix: pass at least one PickerRow so subprocess actually runs, then assert correct return values for rc=130 and rc=1. |
+| Important | src/croam/cli.py:120 | `cmd_launch` calls `ctx.obj.get("_config")` which returns `None` (the global callback never stores `_config`). Phase 5's `launch.py` exists, so the ImportError guard at line 115 never fires. `launch_cmd(config=None)` will produce unhandled `AttributeError` on first `config.xxx` access -- raw Python traceback instead of clean `croam: ...` message. The `# type: ignore[arg-type]` masks this. Fix: either store config in `ctx.obj` before verb dispatch (in the global callback), or have `cmd_launch` call `load_config()` directly the way `cmd_emit_state` does. |
+| Minor | tests/test_cli.py:72-79 | `test_top_level_croam_error_handler` does not assert `"Traceback" not in result.stderr`. The implementation is correct but the test doesn't guard against regressions. |
+| Minor | docs/agent/project-start/FUNCTIONAL_QA_STRATEGY.md:29 | Surface 1 description still references `croam = "croam.cli:app"`. Should be `croam.cli:main` after Phase 6's entry point change. |
+| Minor | src/croam/picker.py:65,72,75-77,166-168 | `compute_glyph(None)`, `compute_status_word` unreachable/running-busy branches, and `_resolve_cwd` `host_homes` fallback are never directly exercised. Reached indirectly via `render_rows` happy-path tests only. Coverage is 91% so this is acceptable but noted. |
+| Minor | tests/test_picker.py:71 | `test_format_input_lines_exact_shape` uses `"1d"` as a literal `PickerRow.last` value but `format_last_column` produces `"24h"` not `"1d"`. The wire-format test checks column layout, not formatting output -- functionally correct, cosmetically inconsistent. |
+
+The two Important issues are the gating findings; spark-fix will address them. Minor findings are documented for the next planning pass.
 
 ---
 
 ## Fix Cycle History
 
-> No fixes needed. All merges clean, all tests pass on first run.
+| Attempt | Type | Target | Description | Result |
+|---------|------|--------|-------------|--------|
+| -- | -- | -- | (initial checkpoint had no inline fixes) | -- |
+| 1 | spark-fix | review issues | Two Important findings: (a) launch_picker tests for rc=130/rc=1 don't exercise subprocess; (b) `cmd_launch` reads `ctx.obj.get("_config")` which is never set, yielding `AttributeError` on real launch. | Pending |
 
 ---
 
