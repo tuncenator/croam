@@ -39,7 +39,7 @@ def discover_local_sessions(home: Path) -> list[ClaudeSession]:
     # Build sid -> best metadata mapping
     sid_to_meta: dict[str, dict] = {}
     if sessions_dir.exists():
-        for json_path in sessions_dir.glob("*.json"):
+        for json_path in sorted(sessions_dir.glob("*.json")):
             try:
                 with json_path.open() as f:
                     meta = json.load(f)
@@ -117,9 +117,7 @@ def discover_local_sessions(home: Path) -> list[ClaudeSession]:
                 )
 
     # Sort: updated_at_ms desc (nulls last), then sid asc
-    sessions.sort(
-        key=lambda s: (0 if s.updated_at_ms is None else -s.updated_at_ms, s.sid)
-    )
+    sessions.sort(key=lambda s: (0 if s.updated_at_ms is None else -s.updated_at_ms, s.sid))
     return sessions
 
 
