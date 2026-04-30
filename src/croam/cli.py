@@ -1,4 +1,5 @@
 """Typer CLI stub for croam. Phase 6 replaces this with the full dispatcher."""
+
 from __future__ import annotations
 
 import typer

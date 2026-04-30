@@ -1,4 +1,5 @@
 """croam-specific exceptions."""
+
 from __future__ import annotations
 
 
@@ -9,7 +10,9 @@ class CroamError(Exception):
 class ConfigError(CroamError):
     """Invalid or missing configuration."""
 
-    def __init__(self, message: str, *, field: str | None = None, reason: str | None = None) -> None:
+    def __init__(
+        self, message: str, *, field: str | None = None, reason: str | None = None
+    ) -> None:
         self.field = field
         self.reason = reason
         super().__init__(message)

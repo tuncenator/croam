@@ -2,6 +2,7 @@
 
 Schema observed in CODEBASE_CONTEXT.md "Data Models" section.
 """
+
 from __future__ import annotations
 
 import json

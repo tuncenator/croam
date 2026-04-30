@@ -1,4 +1,5 @@
 """Loguru configuration for croam CLI."""
+
 from __future__ import annotations
 
 import sys
@@ -24,7 +25,7 @@ _NOISY_MODULES = {
 def configure(level: str = "INFO", log_file: Path | None = None, debug: bool = False) -> None:
     """Set up croam's logging. Idempotent: removes any existing sinks first."""
     logger.remove()
-    filter_map = {**_NOISY_MODULES, "": level}
+    filter_map: dict[str | None, str | int | bool] = {**_NOISY_MODULES, "": level}
     logger.add(
         sys.stderr,
         format=_STDERR_FORMAT,

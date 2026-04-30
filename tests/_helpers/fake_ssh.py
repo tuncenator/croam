@@ -2,6 +2,7 @@
 
 Fake-ssh script body and the (host, argv) -> fixture path encoding.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -11,7 +12,7 @@ from pathlib import Path
 # The fake ssh script body. __FIXTURES_DIR__ is a literal placeholder
 # replaced by the conftest at install time.
 SSH_SHIM_SCRIPT = (
-    '#!/usr/bin/env python3\n'
+    "#!/usr/bin/env python3\n"
     '"""Fake ssh shim for croam tests. Reads canned responses from disk."""\n'
     r"""import hashlib
 import json

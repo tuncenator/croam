@@ -3,6 +3,7 @@
 Used by Phases 3, 4, 7, 8. Phase 1 owns this helper; later phases must NOT
 reimplement the schema.
 """
+
 from __future__ import annotations
 
 import json

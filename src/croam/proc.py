@@ -6,6 +6,7 @@ All croam subprocess invocations go through this module to enforce:
 - Default capture=True with text=True
 - Default check=False (callers inspect returncode themselves)
 """
+
 from __future__ import annotations
 
 import shlex
