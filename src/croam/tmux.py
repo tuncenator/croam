@@ -122,17 +122,19 @@ def kill_session(name: str, sock: Path | None = None) -> None:
     if result.returncode == 0:
         return
     # tmux returns 1 with stderr "can't find session: NAME" when session is gone -- idempotent.
-    # Also handles "no server running" (server exited) and "error connecting to" (no socket).
+    # Also handles "no server running" (server exited), "error connecting to" (no socket),
+    # "server exited unexpectedly" (inner command exited, auto-cleanup), and "no current
+    # target" (server has no sessions left).
     stderr = result.stderr
     if (
         "can't find session" in stderr
         or "no server running" in stderr
         or "error connecting to" in stderr
+        or "server exited unexpectedly" in stderr
+        or "no current target" in stderr
     ):
         return
-    raise TmuxError(
-        f"tmux kill-session failed (exit {result.returncode}): {stderr.strip()}"
-    )
+    raise TmuxError(f"tmux kill-session failed (exit {result.returncode}): {stderr.strip()}")
 
 
 def list_sessions(sock: Path | None = None) -> list[tuple[str, bool]]:
@@ -146,11 +148,13 @@ def list_sessions(sock: Path | None = None) -> list[tuple[str, bool]]:
     if result.returncode != 0:
         # Exit 1 with these stderr messages means no server / no socket -- empty case.
         stderr = result.stderr
-        if "no server running" in stderr or "error connecting to" in stderr:
+        if (
+            "no server running" in stderr
+            or "error connecting to" in stderr
+            or "server exited unexpectedly" in stderr
+        ):
             return []
-        raise TmuxError(
-            f"tmux list-sessions failed (exit {result.returncode}): {stderr.strip()}"
-        )
+        raise TmuxError(f"tmux list-sessions failed (exit {result.returncode}): {stderr.strip()}")
     sessions: list[tuple[str, bool]] = []
     for line in result.stdout.splitlines():
         if not line.strip():

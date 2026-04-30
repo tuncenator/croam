@@ -11,106 +11,142 @@ from croam.errors import CroamError
 
 
 def test_should_wrap_default(home):
-    assert shim.should_wrap(
-        argv=["claude"],
-        env={},
-        stdin_isatty=True,
-        in_tmux=False,
-    ) is True
+    assert (
+        shim.should_wrap(
+            argv=["claude"],
+            env={},
+            stdin_isatty=True,
+            in_tmux=False,
+        )
+        is True
+    )
 
 
 def test_should_wrap_in_tmux(home):
-    assert shim.should_wrap(
-        argv=["claude"],
-        env={"TMUX": "/tmp/tmux-1000/default,123,4"},
-        stdin_isatty=True,
-        in_tmux=True,
-    ) is False
+    assert (
+        shim.should_wrap(
+            argv=["claude"],
+            env={"TMUX": "/tmp/tmux-1000/default,123,4"},
+            stdin_isatty=True,
+            in_tmux=True,
+        )
+        is False
+    )
 
 
 def test_should_wrap_not_tty(home):
-    assert shim.should_wrap(
-        argv=["claude"],
-        env={},
-        stdin_isatty=False,
-        in_tmux=False,
-    ) is False
+    assert (
+        shim.should_wrap(
+            argv=["claude"],
+            env={},
+            stdin_isatty=False,
+            in_tmux=False,
+        )
+        is False
+    )
 
 
 def test_should_wrap_no_tmux_flag(home):
-    assert shim.should_wrap(
-        argv=["claude", "--no-tmux", "--effort", "max"],
-        env={},
-        stdin_isatty=True,
-        in_tmux=False,
-    ) is False
+    assert (
+        shim.should_wrap(
+            argv=["claude", "--no-tmux", "--effort", "max"],
+            env={},
+            stdin_isatty=True,
+            in_tmux=False,
+        )
+        is False
+    )
 
 
 def test_should_wrap_print_flag(home):
-    assert shim.should_wrap(
-        argv=["claude", "--print", "explain this"],
-        env={},
-        stdin_isatty=True,
-        in_tmux=False,
-    ) is False
+    assert (
+        shim.should_wrap(
+            argv=["claude", "--print", "explain this"],
+            env={},
+            stdin_isatty=True,
+            in_tmux=False,
+        )
+        is False
+    )
 
 
 def test_should_wrap_help_long(home):
-    assert shim.should_wrap(
-        argv=["claude", "--help"],
-        env={},
-        stdin_isatty=True,
-        in_tmux=False,
-    ) is False
+    assert (
+        shim.should_wrap(
+            argv=["claude", "--help"],
+            env={},
+            stdin_isatty=True,
+            in_tmux=False,
+        )
+        is False
+    )
 
 
 def test_should_wrap_help_short(home):
-    assert shim.should_wrap(
-        argv=["claude", "-h"],
-        env={},
-        stdin_isatty=True,
-        in_tmux=False,
-    ) is False
+    assert (
+        shim.should_wrap(
+            argv=["claude", "-h"],
+            env={},
+            stdin_isatty=True,
+            in_tmux=False,
+        )
+        is False
+    )
 
 
 def test_should_wrap_opt_out_env_default_name(home):
-    assert shim.should_wrap(
-        argv=["claude"],
-        env={"CROAM_NO_TMUX": "1"},
-        stdin_isatty=True,
-        in_tmux=False,
-    ) is False
+    assert (
+        shim.should_wrap(
+            argv=["claude"],
+            env={"CROAM_NO_TMUX": "1"},
+            stdin_isatty=True,
+            in_tmux=False,
+        )
+        is False
+    )
 
 
 def test_should_wrap_opt_out_env_custom_name(home):
-    assert shim.should_wrap(
-        argv=["claude"],
-        env={"NOPE": "1"},
-        stdin_isatty=True,
-        in_tmux=False,
-        opt_out_env_name="NOPE",
-    ) is False
+    assert (
+        shim.should_wrap(
+            argv=["claude"],
+            env={"NOPE": "1"},
+            stdin_isatty=True,
+            in_tmux=False,
+            opt_out_env_name="NOPE",
+        )
+        is False
+    )
 
 
 def test_derive_sid_resume_space(home):
-    assert shim.derive_sid(
-        argv=["claude", "--resume", "abc-123"],
-        env={},
-    ) == "abc-123"
+    assert (
+        shim.derive_sid(
+            argv=["claude", "--resume", "abc-123"],
+            env={},
+        )
+        == "abc-123"
+    )
 
 
 def test_derive_sid_resume_equals(home):
-    assert shim.derive_sid(
-        argv=["claude", "--resume=abc-123"],
-        env={},
-    ) == "abc-123"
+    assert (
+        shim.derive_sid(
+            argv=["claude", "--resume=abc-123"],
+            env={},
+        )
+        == "abc-123"
+    )
 
 
 def test_derive_sid_resume_in_middle(home):
-    assert shim.derive_sid(
-        argv=["claude", "--effort", "max", "--resume", "abc-123", "--print"],
-        env={},
-    ) == "abc-123"
+    assert (
+        shim.derive_sid(
+            argv=["claude", "--effort", "max", "--resume", "abc-123", "--print"],
+            env={},
+        )
+        == "abc-123"
+    )
 
 
 def test_derive_sid_resume_dangling(home):

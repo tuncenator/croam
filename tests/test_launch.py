@@ -62,6 +62,7 @@ def test_build_launch_plan_wrap_path(home, tmp_path, monkeypatch):
     assert plan.mode == "wrap"
     uuid.UUID(plan.sid)  # valid uuid4
     assert plan.tmux_session_name == f"claude-{plan.sid}"
+    assert plan.tmux_new_argv is not None
     assert plan.tmux_new_argv[:6] == [
         "tmux",
         "new-session",
