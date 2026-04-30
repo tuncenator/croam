@@ -101,7 +101,26 @@ The two Important issues are the gating findings; spark-fix will address them. M
 | Attempt | Type | Target | Description | Result |
 |---------|------|--------|-------------|--------|
 | -- | -- | -- | (initial checkpoint had no inline fixes) | -- |
-| 1 | spark-fix | review issues | Two Important findings: (a) launch_picker tests for rc=130/rc=1 don't exercise subprocess; (b) `cmd_launch` reads `ctx.obj.get("_config")` which is never set, yielding `AttributeError` on real launch. | Pending |
+| 1 | spark-fix | tests/test_picker.py + src/croam/cli.py + tests/test_cli.py | Important #1: `test_launch_picker_cancel` and `test_launch_picker_no_match` previously passed `rows=[]` and short-circuited before subprocess launch -- patched to pass a real PickerRow so the rc=130 / rc=1 branches at picker.py:284-285 actually run. Important #2: `cmd_launch` did `ctx.obj.get("_config")` (never set) -> `launch_cmd(config=None)` -> AttributeError. Switched to Option B: `cmd_launch` now calls `load_config()` directly inside its body, matching `cmd_emit_state`. Removed the `# type: ignore[arg-type]`. Added `test_cmd_launch_uses_config` that monkeypatches `launch_cmd` and asserts the captured `config` arg is a real `Config` instance. | Success |
+
+### Re-Review Result
+
+**Result**: REVIEW PASSED WITH NOTES (4 minor, all non-blocking)
+**Reviewer**: spark-code-reviewer (claude-opus-4-6), 2026-04-30 (re-review pass)
+**Diff range**: `08fb31c891d7ecf70a0c662ba2683200500cbb5b..75b413627fa80278b3999787ac7e4614c886b8d8`
+
+Both Important findings resolved end-to-end:
+- Picker rc=130 and rc=1 branches now covered (line 285 of picker.py reachable).
+- `cmd_launch` and `cmd_emit_state` now structurally symmetric: both call `load_config()` directly inside the verb body.
+- `# type: ignore[arg-type]` removed.
+- 209 tests pass (up from 208, +1 from the new test).
+- pyright + ruff + format all clean.
+
+The 4 Minor notes from the re-review (none gate further work):
+- Phase summary references to `ctx.obj.get("_config")` as future work are stale documentation; not load-bearing.
+- FUNCTIONAL_QA_STRATEGY.md still references the old `croam.cli:app` entry point (carry-over from prior review's minor list).
+- `test_top_level_croam_error_handler` doesn't explicitly assert `"Traceback" not in stderr` (carry-over).
+- Test count in the phase summary now lags the real suite by 1 (208 vs 209). Not load-bearing.
 
 ---
 
