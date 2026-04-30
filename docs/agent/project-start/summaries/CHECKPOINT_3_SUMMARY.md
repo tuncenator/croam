@@ -87,7 +87,35 @@
 
 ## Code Review Results
 
-> Pending code review.
+**Result**: REVIEW PASSED WITH NOTES (3 minor)
+**Reviewer**: spark-code-reviewer (claude-opus-4-6), 2026-04-30
+**Diff range**: `b26a567e047911cf3bd23e885cea370303918139..80d4974916febca5fc399c8b85dff7689a53cc2b`
+
+### Issues
+
+| Severity | Area | Finding | Disposition |
+|----------|------|---------|-------------|
+| Minor | Repair commit `6305914` | Touched `tests/test_shim.py` (pure formatting) but commit message lists only `test_launch.py` and `tmux.py`. Misleading attribution; no functional impact. | No action; document for next planning pass. |
+| Minor | `tests/_helpers/synth_assertions.py:write_assertions_file` | Does NOT use `sort_keys=True`, while production `write_local_assertions` does. Could produce confusing diffs when comparing helper-written vs production-written files. | No functional impact; align in a future cleanup if needed. |
+| Minor | Phase 5 worktree commits | `e27bc66` (tmux.py) and `e6b688c` (shim.py) ship before their tests in `49f22d1`. Borderline test-first discipline within a parallel-phase workflow; the entire worktree is reviewed atomically so this is pragmatically acceptable. | No action; coverage is strong (100% on shim, 100% on hosts, 100% on ownership, 91% on sessions, 89% on tmux with documented unreachable lines). |
+
+### Notes
+
+- Worktree isolation invariant intact: all three merge commits (`f0bdedd`, `6aca563`, `a3a5880`) are genuine `--no-ff` merges with two parents; no `[Phase X/11]` commit lands directly on the feature branch as a first-parent.
+- `commands/__init__.py` resolution: Phase 3's docstring used (`"""croam command modules. Each verb maps to one module here."""`). Single line, no other content.
+- Phase 5's stub `ownership.py` fully superseded by Phase 4's real implementation (verified via grep + module inspection).
+- `should_wrap` receives the original `argv` (not stripped) so `--no-tmux` detection works. Documented deviation from PHASE_05.md spec; the strip happens AFTER the should_wrap decision in `build_launch_plan`. Tested by `test_build_launch_plan_strips_no_tmux`.
+- Assertion-before-side-effect contract: `launch_cmd` writes the assertion at line 161 BEFORE the tmux call at line 188. `test_assertion_persists_on_tmux_failure` verifies the assertion stays on disk when tmux raises.
+- Atomic write fault injection (`test_write_atomic_crash_preserves_original`) and stable bytes (`test_write_stable_bytes`) both present and passing.
+- Merge tiebreaker (alphabetical-by-owner, smaller wins) tested by `test_merge_tiebreaker_alphabetical`.
+- `decode_cwd(subdir.name, host_home=home)` -- `host_home` passed in `discover_local_sessions` so the known-prefix shortcut fires.
+- `tmux new-session` argv includes the literal `--` separator before the inner command (verified at `build_new_session_argv` and `test_build_new_session_argv`).
+- `kill_session` idempotency now handles all five tmux stderr substrings: `"can't find session"`, `"no server running"`, `"error connecting to"`, `"server exited unexpectedly"`, `"no current target"`. The repair commit `6305914` added the last two after Phase 5's coder under-specified the list.
+- Cross-phase imports resolve correctly: `from croam.ownership import Assertion, write_local_assertion` (used in `launch.py`) and `from croam.ownership import Assertion` (used in `synth_assertions.py`) both resolve to Phase 4's `ownership.py`.
+- Functional QA: 7 entries in Phase 3, 7 in Phase 4, 9 in Phase 5. All have byte-for-byte captured outputs and pass/fail verdicts. Tier 2 (`test_e2e_dummy_discovery`) was actually run with `CROAM_E2E=1` and passed.
+- Evidence captured: claude sessions JSON schema (Phase 3), `~/.claude/projects/` listing (Phase 3), OpenSSH stderr on connection failure (Phase 3), ownership.json wire shape (Phase 4), ISO8601 datetime forms (Phase 4), tmux subprocess output captures (Phase 5), claude binary PATH info (Phase 5).
+- Security: no secrets, no helper edits (no `scripts/spark-*.sh` changes), no hardcoded credentials, no untagged infrastructure values.
+- Cross-cutting: `from __future__ import annotations` in all 7 src modules; no bare `print()` (sys.stdout.write used in emit_state_cmd and launch_cmd is correct for JSON wire output); loguru log levels match the spec (WARNING for malformed metadata, INFO for side-effect events, DEBUG for argv); 100-char line length and public function docstrings present throughout.
 
 ---
 
