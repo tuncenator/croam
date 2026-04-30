@@ -50,7 +50,7 @@
 ### Conductor
 
 - **Total Batches**: 8
-- **Current Batch**: 0 (not started)
+- **Current Batch**: 2
 - **Pacing**: auto-refresh
 - **Batches Per Session**: 4
 - **Execution Plan**: docs/agent/project-start/EXECUTION_PLAN.md
@@ -58,16 +58,16 @@
 ---
 
 **Last Updated:** 2026-04-30
-**Current Phase:** 1 of 11
-**Phase Name:** Foundation: project skeleton, logging, test harness
-**Progress:** 0% (0/11 phases complete)
+**Current Phase:** 2 of 11
+**Phase Name:** Config & paths
+**Progress:** 9% (1/11 phases complete)
 
 ---
 
 ## Progress Bar
 
 ```
-[-----------] 0% (0/11)
+[#-------------------] 9% (1/11)
 ```
 
 ---
@@ -76,8 +76,8 @@
 
 | Phase | Name | Status |
 |-------|------|--------|
-| 1 | Foundation: project skeleton, logging, test harness | `[Current]` |
-| 2 | Config & paths | `[Pending]` |
+| 1 | Foundation: project skeleton, logging, test harness | `[Complete]` |
+| 2 | Config & paths | `[Current]` |
 | 3 | Sessions & host probes | `[Pending]` |
 | 4 | Ownership state | `[Pending]` |
 | 5 | Tmux integration & claude shim | `[Pending]` |
@@ -92,14 +92,14 @@
 
 ## Instructions for Agents
 
-1. Read `phase_plans/PHASE_01.md` for detailed requirements for Phase 1
-2. This is the first phase - no previous summaries to read
+1. Read `phase_plans/PHASE_02.md` for detailed requirements for Phase 2
+2. Read the most recent phase summary (`summaries/PHASE_01_SUMMARY.md`) for what was just built
 3. Complete the phase following the build-verify-commit cycle
-4. Create `summaries/PHASE_01_SUMMARY.md`
-5. Update this file:
-   - Mark Phase 1 as `[Complete]`
-   - Set Phase 2 as `[Current]`
-   - Update "Current Phase" to "2 of 11"
+4. Create `summaries/PHASE_02_SUMMARY.md`
+5. Update this file (the conductor handles this when running via `/spark-conductor`):
+   - Mark Phase 2 as `[Complete]`
+   - Set Phase 3 as `[Current]`
+   - Update "Current Phase" to "3 of 11"
    - Update "Progress" percentage and count
    - Update progress bar (each `#` = completed phase, each `-` = remaining phase)
 
