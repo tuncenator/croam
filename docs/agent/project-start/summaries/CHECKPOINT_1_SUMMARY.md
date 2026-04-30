@@ -87,7 +87,30 @@ No helpers were listed for Phase 1. No phase summary reported helper issues.
 
 ## Code Review Results
 
-Pending code review.
+**Result**: REVIEW PASSED (clean -- no issues raised)
+**Reviewer**: spark-code-reviewer (claude-opus-4-6), 2026-04-30
+**Diff range**: `e37e806..1823261c1e71d2db6e82e0db46904c19b4f2885b`
+
+### Issues
+
+| Severity | Area | Finding | Disposition |
+|----------|------|---------|-------------|
+| -- | -- | None | -- |
+
+### Notes
+
+- pyproject.toml: PEP 735 `[dependency-groups]`, `uv_build` backend, `[tool.uv] default-groups`, `[project.scripts]`, `requires-python = ">=3.11"` -- all correct.
+- errors.py: full CroamError hierarchy verified. The plan's `# noqa: A001` was replaced with `# intentional shadow of builtin, scoped to this module` -- ruff A001 only flags parameter shadows, so the noqa was unnecessary; ruff still passes. Acceptable.
+- proc.py: `from croam.errors import TimeoutError as CroamTimeoutError` alias used consistently. `subprocess.TimeoutExpired` translated to typed error. `CalledProcessError` deliberately not caught.
+- log.py: `enqueue=True` on file sink, `colorize=True` on stderr, `rotation="10 MB"`, `retention=5`. Idempotent via `logger.remove()` first.
+- Safety guard: implemented as `@pytest.hookimpl(hookwrapper=True) pytest_runtest_call` rather than an autouse fixture. This is an improvement: autouse fixtures fire BEFORE the `home` fixture redirects HOME, which would have produced false failures for every test that uses `home`. The hookwrapper fires after all fixture setup. Documented in the phase summary.
+- Fake-ssh shim hash agreement: `sha1(json.dumps(argv, sort_keys=True))[:16]` agrees byte-for-byte between the in-process `fixture_path_for` and the on-disk `SSH_SHIM_SCRIPT`. No drift.
+- `synth_jsonl._encode_cwd` is self-contained (no `src/croam` imports) and intentionally duplicated for Phase 1 standalone-ness. Documented for Phase 2 cross-verification.
+- Test-first compliance: test helpers committed in commit 3 before tests in commit 4. For a foundation phase where the harness IS the implementation, the bundling of conftest + smoke tests + final src/* re-stage in commit 4 is acceptable; tests describe behavior, not implementation shape.
+- Functional QA: 7 entries present, byte-for-byte outputs (a couple are truncated at 500-byte boundary, which is expected). Surfaces invoked end-to-end via the actual harness, not unit-test bypass. The agent's variant of Functional QA check 3 (a temp test file run via real subprocess, instead of the plan's exact incantation) is a valid stronger test of the guard.
+- Evidence-vs-types: 4 captured interfaces (tomllib, loguru-serialize, subprocess.CompletedProcess, typer.Typer signature). Code matches sample shapes. No drift.
+- Security: no secrets, no hardcoded credentials, no helper-script edits, no untagged infrastructure values.
+- Cross-cutting: `from __future__ import annotations` everywhere, no `print()`, line-length 100, public function docstrings, error hierarchy in place.
 
 ---
 
