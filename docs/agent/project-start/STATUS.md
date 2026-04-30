@@ -50,7 +50,7 @@
 ### Conductor
 
 - **Total Batches**: 8
-- **Current Batch**: 2
+- **Current Batch**: 3
 - **Pacing**: auto-refresh
 - **Batches Per Session**: 4
 - **Execution Plan**: docs/agent/project-start/EXECUTION_PLAN.md
@@ -58,16 +58,16 @@
 ---
 
 **Last Updated:** 2026-04-30
-**Current Phase:** 2 of 11
-**Phase Name:** Config & paths
-**Progress:** 9% (1/11 phases complete)
+**Current Phase:** 3 of 11
+**Phase Name:** Sessions & host probes
+**Progress:** 18% (2/11 phases complete)
 
 ---
 
 ## Progress Bar
 
 ```
-[#-------------------] 9% (1/11)
+[##------------------] 18% (2/11)
 ```
 
 ---
@@ -77,10 +77,10 @@
 | Phase | Name | Status |
 |-------|------|--------|
 | 1 | Foundation: project skeleton, logging, test harness | `[Complete]` |
-| 2 | Config & paths | `[Current]` |
-| 3 | Sessions & host probes | `[Pending]` |
-| 4 | Ownership state | `[Pending]` |
-| 5 | Tmux integration & claude shim | `[Pending]` |
+| 2 | Config & paths | `[Complete]` |
+| 3 | Sessions & host probes | `[Current]` |
+| 4 | Ownership state | `[Current]` |
+| 5 | Tmux integration & claude shim | `[Current]` |
 | 6 | Picker & CLI dispatcher | `[Pending]` |
 | 7 | Verbs: attach, peek, ls | `[Pending]` |
 | 8 | Verbs: claim, fork (incl. ssh-strict, --here) | `[Pending]` |
@@ -92,16 +92,13 @@
 
 ## Instructions for Agents
 
-1. Read `phase_plans/PHASE_02.md` for detailed requirements for Phase 2
-2. Read the most recent phase summary (`summaries/PHASE_01_SUMMARY.md`) for what was just built
+Batch 3 runs Phases 3, 4, 5 in parallel under separate worktrees. Each agent should:
+
+1. Read its assigned `phase_plans/PHASE_0X.md`
+2. Read the 2 most recent phase summaries (`summaries/PHASE_02_SUMMARY.md`, `summaries/PHASE_01_SUMMARY.md`)
 3. Complete the phase following the build-verify-commit cycle
-4. Create `summaries/PHASE_02_SUMMARY.md`
-5. Update this file (the conductor handles this when running via `/spark-conductor`):
-   - Mark Phase 2 as `[Complete]`
-   - Set Phase 3 as `[Current]`
-   - Update "Current Phase" to "3 of 11"
-   - Update "Progress" percentage and count
-   - Update progress bar (each `#` = completed phase, each `-` = remaining phase)
+4. Create `summaries/PHASE_0X_SUMMARY.md`
+5. Do NOT update STATUS.md, do NOT post to Jira, do NOT push -- the conductor handles all of that
 
 **Phase plans:** See `phase_plans/PHASE_XX.md`
 **Project overview:** See `PROJECT_PLAN.md`
