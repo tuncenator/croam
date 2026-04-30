@@ -3,7 +3,7 @@
 > **Living document** -- each phase updates this with new discoveries and changes.
 > Read this before exploring the codebase. It may already have what you need.
 >
-> Last updated by: Checkpoint 2 - Phase 2 Config & paths (2026-04-30)
+> Last updated by: Checkpoint 3 - Phases 3, 4, 5 merged (2026-04-30)
 
 ---
 
@@ -40,19 +40,29 @@ The full design lives at `docs/specs/2026-04-30-croam-design.md`. Phase 1 establ
 | `src/croam/paths.py` | `encode_cwd`, `decode_cwd` (lossy, fs-probe), `normalize_cwd`, `denormalize_cwd` | Phase 2. 100% coverage. |
 | `tests/test_paths.py` | 29 tests (28 Tier 1 + 1 Tier 2 e2e), includes `synth_jsonl._encode_cwd` cross-verification | Phase 2. |
 | `tests/test_config.py` | 14 tests covering all validation paths and bootstrap skeleton | Phase 2. |
-| `src/croam/sessions.py` | Discover claude's `~/.claude/{projects,sessions}` and join with tmux | Created in Phase 3. |
-| `src/croam/hosts.py` | SSH reachability fanout, `--emit-state` over SSH | Created in Phase 3. |
-| `src/croam/ownership.py` | per-host assertion read/write/merge/flatten + lineage | Created in Phase 4. |
-| `src/croam/tmux.py` | tmux subprocess wrappers (new-session, attach, has-session, kill-session) | Created in Phase 5. |
-| `src/croam/shim.py` | Decide whether to wrap `claude` in tmux | Created in Phase 5. |
+| `src/croam/sessions.py` | `ClaudeSession` dataclass, `discover_local_sessions`, `tmux_attached`; joins `~/.claude/projects/` transcripts with `~/.claude/sessions/` metadata | Phase 3. 91% coverage. |
+| `src/croam/hosts.py` | `HostStatus`, `probe_reachability` (parallel SSH), `emit_state` (wire format), `fetch_remote_state` | Phase 3. 100% coverage. |
+| `src/croam/commands/__init__.py` | Package marker for command modules (one module per verb) | Phase 3. |
+| `src/croam/commands/emit_state.py` | `emit_state_cmd(home, state_root, hostname) -> int`; Phase 6 wires into typer | Phase 3. |
+| `src/croam/ownership.py` | `Assertion`, `LineageEntry` dataclasses; read/write/merge/flatten/detect_outclaim + lineage; atomic writes via `os.replace` | Phase 4. 100% coverage. |
+| `src/croam/tmux.py` | Five argv-builders + five side-effecting wrappers (has_session, new_session_detached, attach, kill_session, list_sessions) | Phase 5. 89% coverage. |
+| `src/croam/shim.py` | Pure decision functions: `should_wrap`, `derive_sid`, `strip_no_tmux`, `find_claude_real`, `is_in_tmux` | Phase 5. 100% coverage. |
+| `src/croam/commands/launch.py` | `LaunchPlan` dataclass, `build_launch_plan` (pure), `launch_cmd` orchestrator with `--no-exec` mode and assertion-before-side-effect contract | Phase 5. 95% coverage. |
 | `src/croam/picker.py` | fzf orchestration, row layout, multi-select intersection | Created in Phase 6. |
 | `src/croam/sync.py` | syncthing mirror access (read-only filesystem); conflict file detection | Created in Phase 9. |
 | `src/croam/doctor.py` | Diagnostics: config + SSH + syncthing + ownership consistency | Created in Phase 9. |
 | `tests/conftest.py` | 5 fixtures (home, tmux_socket, ssh_shim, state_root, e2e_dummy) + `pytest_runtest_call` hookwrapper safety guard | Phase 1. |
 | `tests/_helpers/synth_jsonl.py` | `build_jsonl(home, sid, cwd)` with inlined `_encode_cwd` (standalone, no src/ deps) | Phase 1. |
 | `tests/_helpers/synth_session.py` | `build_session_metadata(home, pid, sid, cwd)` | Phase 1. |
+| `tests/_helpers/synth_assertions.py` | `build_assertion(sid, owner, asserted_at, ...)` and `write_assertions_file(state_root, hostname, assertions)` for test seeding | Phase 4. |
 | `tests/_helpers/fake_ssh.py` | `SSH_SHIM_SCRIPT` + `fixture_path_for()` for argv-hashed fixture lookup | Phase 1. |
 | `tests/test_smoke.py` | 14 smoke tests covering all fixtures, log, errors, proc, safety guard | Phase 1. |
+| `tests/test_sessions.py` | 19 Tier-1 + 1 Tier-2 tests for session discovery and tmux_attached | Phase 3. |
+| `tests/test_hosts.py` | 15 tests for SSH probes, emit_state, fetch_remote_state, emit_state_cmd | Phase 3. |
+| `tests/test_ownership.py` | 43 tests covering all read/write/merge/flatten/lineage paths + atomic write fault injection | Phase 4. |
+| `tests/test_tmux.py` | 13 tests (argv builders + real tmux integration via tmux_socket) | Phase 5. |
+| `tests/test_shim.py` | 24 pure-function tests covering all branches of all five shim functions | Phase 5. |
+| `tests/test_launch.py` | 8 integration tests for build_launch_plan and launch_cmd (uses --no-exec and real tmux) | Phase 5. |
 | `tests/fixtures/` | Synthetic session JSONLs, ownership.json snapshots, sample TOML configs | Created across Phase 4, 7. |
 
 ---
@@ -158,41 +168,53 @@ def bootstrap_config(path: Path) -> Config:
     """
 ```
 
-### Phase 3 (sessions and host probes)
+### Phase 3 (sessions and host probes) -- FINALIZED
 
 ```python
 # src/croam/sessions.py
 @dataclass(frozen=True)
 class ClaudeSession:
-    sid: str
-    cwd: Path
-    transcript_path: Path
-    pid: int | None      # None if not currently running on this host
-    status: Literal["idle", "busy"] | None  # None if not currently running
-    started_at: int | None  # ms-epoch
-    updated_at: int | None  # ms-epoch
-    name: str | None      # claude's autoname or user /rename
-    version: str | None   # e.g. "2.1.123"
+    sid: str                          # uuid string from filename stem
+    cwd: Path                         # decoded from <encoded-cwd> dir name; absolute
+    transcript_path: Path             # absolute path to <sid>.jsonl
+    pid: int | None                   # None when no live ~/.claude/sessions/*.json found
+    status: Literal["idle", "busy"] | None  # None when archived; coerce unknown -> "idle"
+    started_at_ms: int | None         # epoch ms, from sessions/<PID>.json startedAt
+    updated_at_ms: int | None         # epoch ms, from sessions/<PID>.json updatedAt
+    name: str | None                  # autoname or /rename; absent in many sessions
+    version: str | None               # claude version, e.g. "2.1.123"
 
 def discover_local_sessions(home: Path) -> list[ClaudeSession]:
-    """Scan ~/.claude/projects/* for transcripts, join with ~/.claude/sessions/*.json by sid."""
+    """Scan ~/.claude/projects/* for transcripts, join with ~/.claude/sessions/*.json by sid.
+    Returns sorted by updated_at_ms desc (nulls last), sid asc tiebreak."""
+
+def tmux_attached(sid: str, sock: Path | None = None) -> tuple[bool, bool]:
+    """Returns (has_session, attached). Uses proc.run against tmux."""
 
 # src/croam/hosts.py
 @dataclass(frozen=True)
 class HostStatus:
     name: str
     reachable: bool
-    last_probed: datetime
-    error: str | None  # populated when not reachable
+    last_probed: datetime  # tz-aware UTC
+    error: str | None      # None when reachable; populated otherwise
 
 def probe_reachability(hosts: list[str], timeout_s: float = 2.0) -> dict[str, HostStatus]:
-    """Parallel SSH probes via ThreadPoolExecutor."""
+    """Parallel SSH probes via ThreadPoolExecutor (max 8 workers)."""
 
-def emit_state(home: Path, state_root: Path) -> dict:
-    """Build the JSON payload for `croam --emit-state` (hidden subcommand)."""
+def emit_state(home: Path, state_root: Path, hostname: str) -> dict:
+    """Build the JSON wire format for `croam emit-state`. Returns raw dict (no datetimes/Paths).
+    Keys: hostname, ownership, lineage, host_cache, sessions."""
+
+def fetch_remote_state(host: str, ssh_alias: str, timeout_s: float = 5.0) -> dict | None:
+    """SSH to peer and run `croam emit-state --json`. Returns parsed dict or None on failure."""
+
+# src/croam/commands/emit_state.py
+def emit_state_cmd(home: Path, state_root: Path, hostname: str) -> int:
+    """Print per-host state JSON to stdout. Returns 0 on success."""
 ```
 
-### Phase 4 (ownership)
+### Phase 4 (ownership) -- FINALIZED
 
 ```python
 # src/croam/ownership.py
@@ -200,33 +222,116 @@ def emit_state(home: Path, state_root: Path) -> dict:
 class Assertion:
     sid: str
     owner: str
-    asserted_at: datetime
+    asserted_at: datetime  # MUST be tz-aware; __post_init__ enforces
     action: Literal["create", "claim", "release"]
     cwd_normalized: str
-    previous_owner: str | None  # for claim only
+    previous_owner: str | None = None  # required for claim, forbidden for non-claim
 
-def read_local_assertions(state_root: Path, hostname: str) -> dict[str, Assertion]: ...
+@dataclass(frozen=True)
+class LineageEntry:
+    fork_sid: str
+    parent_sid: str
+    fork_n: int
+
+def read_local_assertions(state_root: Path, hostname: str) -> dict[str, Assertion]:
+    """Read <state_root>/<hostname>/ownership.json. Returns {} if absent."""
+
+def read_all_assertions(
+    state_root: Path, peer_states: dict[str, dict] | None = None
+) -> dict[str, dict[str, Assertion]]:
+    """Read all hosts' ownership.json. peer_states overrides on-disk for those peers."""
+
 def merge_assertions(per_host: dict[str, dict[str, Assertion]]) -> dict[str, Assertion]:
-    """Most-recent-asserted_at wins per sid."""
+    """Most-recent-asserted_at wins per sid. Tiebreaker: alphabetical-by-owner (smaller wins)."""
+
+def write_local_assertions(
+    state_root: Path, hostname: str, assertions: dict[str, Assertion]
+) -> None:
+    """Atomic write of <state_root>/<hostname>/ownership.json via tempfile + fsync + os.replace."""
+
+def write_local_assertion(state_root: Path, hostname: str, assertion: Assertion) -> None:
+    """Singular convenience wrapper: reads existing file, inserts one assertion, rewrites atomically."""
+
 def flatten_local(state_root: Path, hostname: str, merged: dict[str, Assertion]) -> None:
-    """Rewrite our own ownership.json to keep only entries we currently own."""
+    """Rewrite our own ownership.json keeping only entries we currently own per merged view."""
+
+def detect_outclaim(
+    state_root: Path, hostname: str, merged: dict[str, Assertion]
+) -> list[str]:
+    """Returns sorted sids where local has an assertion but merged[sid].owner != hostname."""
+
+def read_lineage(state_root: Path, hostname: str) -> dict[str, LineageEntry]: ...
+def write_lineage(state_root: Path, hostname: str, lineage: dict[str, LineageEntry]) -> None: ...
+def add_lineage(state_root: Path, hostname: str, fork_sid: str, parent_sid: str) -> int:
+    """Append lineage entry; compute fork_n = max existing for parent + 1. First fork yields 1."""
 ```
 
-### Phase 5 (tmux & shim)
+On-disk JSON schema (frozen by Phase 4):
+- `asserted_at` uses `+00:00` suffix (Python `datetime.isoformat()`), not `Z`. Reader accepts both via `_parse_iso_utc`.
+- `previous_owner` key is ALWAYS present (null for non-claim).
+- `sort_keys=True` + `sorted(assertions.items())` produce stable byte-identical output.
+- Tempfile pattern: `.{name}.tmp.{pid}.{hex4}` with fsync before `os.replace`.
+
+### Phase 5 (tmux, shim, launch) -- FINALIZED
 
 ```python
-# src/croam/tmux.py
-def has_session(sock: Path | None, name: str) -> bool: ...
-def new_session_detached(sock: Path | None, name: str, command: list[str], env: dict[str, str] | None = None) -> None: ...
-def attach(sock: Path | None, name: str, read_only: bool = False) -> int: ...  # exec, returns exit code
-def kill_session(sock: Path | None, name: str) -> None: ...
-def list_sessions(sock: Path | None) -> list[str]: ...
+# src/croam/tmux.py -- argv builders (pure, public)
+def build_has_session_argv(name: str, sock: Path | None) -> list[str]: ...
+def build_new_session_argv(name: str, command: list[str], sock: Path | None) -> list[str]: ...
+def build_attach_argv(name: str, sock: Path | None, read_only: bool) -> list[str]: ...
+def build_kill_session_argv(name: str, sock: Path | None) -> list[str]: ...
+def build_list_sessions_argv(sock: Path | None) -> list[str]: ...
 
-# src/croam/shim.py
-def should_wrap(argv: list[str], env: dict[str, str], stdin_isatty: bool) -> bool: ...
+# src/croam/tmux.py -- side-effecting wrappers
+def has_session(name: str, sock: Path | None = None) -> bool: ...
+def new_session_detached(name: str, command: list[str], *, sock: Path | None = None,
+                         env: dict[str, str] | None = None) -> None: ...
+def attach(name: str, *, sock: Path | None = None, read_only: bool = False) -> NoReturn: ...
+def kill_session(name: str, sock: Path | None = None) -> None:
+    """Idempotent: handles can't-find-session, no-server-running, error-connecting-to,
+    server-exited-unexpectedly, no-current-target."""
+def list_sessions(sock: Path | None = None) -> list[tuple[str, bool]]:
+    """Returns [(name, attached), ...]. Empty list if server not running."""
+
+# src/croam/shim.py -- pure decision functions
+def should_wrap(argv: list[str], env: dict[str, str], stdin_isatty: bool,
+                in_tmux: bool, opt_out_env_name: str = "CROAM_NO_TMUX") -> bool:
+    """False if: not tty, in tmux, opt-out env set, --no-tmux, --print, --help/-h."""
 def derive_sid(argv: list[str], env: dict[str, str]) -> str:
-    """Resume sid if --resume <sid> is in argv; else generate a new uuid4."""
+    """Resume sid if --resume <sid> or --resume=<sid> in argv; else uuid4."""
+def strip_no_tmux(argv: list[str]) -> list[str]: ...
+def find_claude_real() -> Path:
+    """Prefers claude-real, falls back to claude. Raises CroamError if neither found."""
+def is_in_tmux(env: dict[str, str]) -> bool: ...
+
+# src/croam/commands/launch.py
+@dataclass(frozen=True)
+class LaunchPlan:
+    mode: Literal["wrap", "passthrough"]
+    sid: str
+    claude_argv: list[str]
+    cwd_normalized: str
+    tmux_session_name: str | None = None
+    tmux_new_argv: list[str] | None = None
+    tmux_attach_argv: list[str] | None = None
+    passthrough_argv: list[str] | None = None
+
+def build_launch_plan(argv: list[str], env: dict[str, str], stdin_isatty: bool,
+                      cwd: Path, home: Path, config: Config,
+                      sock: Path | None = None) -> LaunchPlan:
+    """Pure function. Decides wrap-vs-passthrough, derives sid, builds all argvs."""
+
+def launch_cmd(argv: list[str], config: Config, home: Path, *, cwd: Path | None = None,
+               env: dict[str, str] | None = None, stdin_isatty: bool | None = None,
+               sock: Path | None = None, no_exec: bool = False) -> int:
+    """Writes assertion BEFORE side effects. --no-exec prints plan as JSON."""
 ```
+
+Key design notes:
+- `should_wrap` receives the ORIGINAL argv (before strip_no_tmux) so `--no-tmux` detection works.
+- `kill_session` idempotency covers five distinct tmux stderr substrings.
+- `launch_cmd` writes ownership assertion before tmux/exec (assertion-before-side-effect contract).
+- `attach` is `NoReturn` (calls `os.execvp`). The `test_launch_cmd_real_tmux` test patches it.
 
 ### Phase 6 (picker & CLI dispatcher)
 
