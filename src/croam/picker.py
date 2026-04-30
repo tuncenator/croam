@@ -8,6 +8,10 @@ import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 from loguru import logger
 
@@ -85,10 +89,10 @@ def _scrub(s: str) -> str:
 
 def render_rows(
     sessions: list[ClaudeSession],
-    assertions: dict[str, object],
+    assertions: Mapping[str, object],
     host_statuses: dict[str, HostStatus],
     pwd: Path | None,
-    lineage: dict[str, object],
+    lineage: Mapping[str, object],
     *,
     now: datetime | None = None,
     host_homes: dict[str, Path] | None = None,
