@@ -3,7 +3,7 @@
 > **Living document** -- each phase updates this with new discoveries and changes.
 > Read this before exploring the codebase. It may already have what you need.
 >
-> Last updated by: Checkpoint 1 - Phase 1 Foundation (2026-04-30)
+> Last updated by: Checkpoint 2 - Phase 2 Config & paths (2026-04-30)
 
 ---
 
@@ -36,8 +36,10 @@ The full design lives at `docs/specs/2026-04-30-croam-design.md`. Phase 1 establ
 | `src/croam/log.py` | `configure(level, log_file, debug)` for loguru; uses FilterDict-typed filter_map for pyright compat | Phase 1. |
 | `src/croam/errors.py` | `CroamError(Exception)` base + 7 subclasses: ConfigError, SshError, OwnershipConflict, TmuxError, SessionNotFound, OrphanRefused, TimeoutError | Phase 1. |
 | `src/croam/proc.py` | `run(argv, *, timeout, check, capture, env, cwd)` subprocess wrapper with DEBUG logging and TimeoutError translation | Phase 1. |
-| `src/croam/config.py` | TOML config loader, `Config` dataclass | Created in Phase 2. |
-| `src/croam/paths.py` | cwd normalization, encoded-cwd encode/decode | Created in Phase 2. |
+| `src/croam/config.py` | TOML config loader, 7 frozen dataclasses (`HostEntry`, `StorageConfig`, `DiscoveryConfig`, `OwnershipConfig`, `PickerConfig`, `ShimConfig`, `Config`), `load_config`, `bootstrap_config` | Phase 2. 100% coverage. |
+| `src/croam/paths.py` | `encode_cwd`, `decode_cwd` (lossy, fs-probe), `normalize_cwd`, `denormalize_cwd` | Phase 2. 100% coverage. |
+| `tests/test_paths.py` | 29 tests (28 Tier 1 + 1 Tier 2 e2e), includes `synth_jsonl._encode_cwd` cross-verification | Phase 2. |
+| `tests/test_config.py` | 14 tests covering all validation paths and bootstrap skeleton | Phase 2. |
 | `src/croam/sessions.py` | Discover claude's `~/.claude/{projects,sessions}` and join with tmux | Created in Phase 3. |
 | `src/croam/hosts.py` | SSH reachability fanout, `--emit-state` over SSH | Created in Phase 3. |
 | `src/croam/ownership.py` | per-host assertion read/write/merge/flatten + lineage | Created in Phase 4. |
