@@ -41,9 +41,7 @@ def test_emit_state_runs(home, state_root, runner, monkeypatch):
     """Phase 3 owns emit_state. Phase 6 verifies wiring through cli."""
     # Write a minimal config so load_config works.
     cfg = home / ".config" / "croam" / "config.toml"
-    cfg.write_text(
-        '[self]\nhostname = "stormtree"\n\n[hosts.stormtree]\nssh = "stormtree"\n'
-    )
+    cfg.write_text('[self]\nhostname = "stormtree"\n\n[hosts.stormtree]\nssh = "stormtree"\n')
     result = runner.invoke(app, ["emit-state"])
     assert result.exit_code == 0, f"output: {result.output}"
     payload = json.loads(result.output)
