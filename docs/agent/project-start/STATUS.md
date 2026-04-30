@@ -50,7 +50,7 @@
 ### Conductor
 
 - **Total Batches**: 8
-- **Current Batch**: 3
+- **Current Batch**: 4
 - **Pacing**: auto-refresh
 - **Batches Per Session**: 4
 - **Execution Plan**: docs/agent/project-start/EXECUTION_PLAN.md
@@ -58,16 +58,16 @@
 ---
 
 **Last Updated:** 2026-04-30
-**Current Phase:** 3 of 11
-**Phase Name:** Sessions & host probes
-**Progress:** 18% (2/11 phases complete)
+**Current Phase:** 6 of 11
+**Phase Name:** Picker & CLI dispatcher
+**Progress:** 45% (5/11 phases complete)
 
 ---
 
 ## Progress Bar
 
 ```
-[##------------------] 18% (2/11)
+[#########-----------] 45% (5/11)
 ```
 
 ---
@@ -78,10 +78,10 @@
 |-------|------|--------|
 | 1 | Foundation: project skeleton, logging, test harness | `[Complete]` |
 | 2 | Config & paths | `[Complete]` |
-| 3 | Sessions & host probes | `[Current]` |
-| 4 | Ownership state | `[Current]` |
-| 5 | Tmux integration & claude shim | `[Current]` |
-| 6 | Picker & CLI dispatcher | `[Pending]` |
+| 3 | Sessions & host probes | `[Complete]` |
+| 4 | Ownership state | `[Complete]` |
+| 5 | Tmux integration & claude shim | `[Complete]` |
+| 6 | Picker & CLI dispatcher | `[Current]` |
 | 7 | Verbs: attach, peek, ls | `[Pending]` |
 | 8 | Verbs: claim, fork (incl. ssh-strict, --here) | `[Pending]` |
 | 9 | Sync mode & doctor | `[Pending]` |
@@ -92,12 +92,12 @@
 
 ## Instructions for Agents
 
-Batch 3 runs Phases 3, 4, 5 in parallel under separate worktrees. Each agent should:
+Batch 4 runs Phase 6 sequentially under a worktree. The agent should:
 
-1. Read its assigned `phase_plans/PHASE_0X.md`
-2. Read the 2 most recent phase summaries (`summaries/PHASE_02_SUMMARY.md`, `summaries/PHASE_01_SUMMARY.md`)
+1. Read `phase_plans/PHASE_06.md`
+2. Read the 2 most recent phase summaries (`summaries/PHASE_05_SUMMARY.md`, `summaries/PHASE_04_SUMMARY.md`) plus checkpoint summary (`summaries/CHECKPOINT_3_SUMMARY.md`)
 3. Complete the phase following the build-verify-commit cycle
-4. Create `summaries/PHASE_0X_SUMMARY.md`
+4. Create `summaries/PHASE_06_SUMMARY.md`
 5. Do NOT update STATUS.md, do NOT post to Jira, do NOT push -- the conductor handles all of that
 
 **Phase plans:** See `phase_plans/PHASE_XX.md`
