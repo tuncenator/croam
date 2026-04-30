@@ -1,0 +1,52 @@
+[project]
+name = "croam"
+version = "0.1.0"
+description = "croam: cross-host claude-code session manager"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Tunc Yildirim", email = "tunc@onlayer.com" }]
+dependencies = [
+    "typer>=0.21.0",
+    "loguru>=0.7.3",
+]
+
+[project.scripts]
+croam = "croam.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.7.19,<0.9"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "pyright>=1.1.380",
+]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.11"
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
