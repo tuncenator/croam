@@ -78,6 +78,34 @@ No helpers were listed for Phase 2. No phase summary reported helper issues.
 
 ---
 
+## Code Review Results
+
+**Result**: REVIEW PASSED WITH NOTES (1 minor)
+**Reviewer**: spark-code-reviewer (claude-opus-4-6), 2026-04-30
+**Diff range**: `53bc266431eba550b0e2aa4778bf2dfebb28c3e9..df26ed157fd0dce86b1b75e1b4ec36d19d5a0279`
+
+### Issues
+
+| Severity | Area | Finding | Disposition |
+|----------|------|---------|-------------|
+| Minor | tests/test_config.py:2 | Module docstring says "All eight tests are Tier 1" but the file actually contains 14 tests. Stale count. | Defer to Phase 3 cleanup pass; not a correctness or security issue. |
+
+### Notes
+
+- `encode_cwd` parametrized against the verified six-row table; double-slash collapsing and trailing-slash handling correct via `Path.parts` normalization.
+- `decode_cwd` candidate cap of 64 enforced; `_emit` helper increments and returns True on overflow. Known-prefix shortcut (when `host_home` provided) does NOT suppress strategy-2 candidates -- both strategies run sequentially with dedup. Empty input and missing leading `-` raise `ConfigError(field="encoded_cwd", ...)`.
+- `normalize_cwd`/`denormalize_cwd` round-trip tested. `cwd == host_home` -> `"~"` (no trailing slash). Symlinks not resolved. `ValueError` for relative input and `~user/...`, NOT `ConfigError`.
+- `load_config` validation: every failure produces `ConfigError(field=..., reason=...)`. Invalid enum reasons list valid options (verified for discovery.mode, ownership.claim_verify, picker.default_filter). Uses `os.path.expanduser` (not `Path.home()`) so test HOME redirect honored.
+- `bootstrap_config` atomic write order verified correct: `tmp.write_text -> tmp.chmod(0o600) -> os.replace(tmp, path)`. Chmod is on the tmp file BEFORE the rename, so the destination is never world-readable. Mode 0o600 round-tripped via `path.stat().st_mode & 0o777`.
+- `synth_jsonl._encode_cwd` cross-verification: `tests/_helpers/synth_jsonl.py` NOT modified in this batch (confirmed via `git diff`); `test_encode_matches_synth_jsonl` parametrizes over three paths and asserts byte-equality.
+- Checkpoint repair commit `9c6509d` (ruff format) is purely formatting -- slice spacing PEP 8 fix and a blank line for two-blank-lines-before-function. Scoped to `paths.py` and `test_paths.py` only. No logic edits.
+- Functional QA: 5 entries with byte-for-byte pasted outputs. Surfaces invoked end-to-end. No paraphrased outcomes.
+- Evidence-vs-types: `tomllib.loads(path.read_text())` used (not `tomllib.load(open, 'rb')`); both produce the same dict shape. Code field accesses match captured sample's keys.
+- Cross-cutting: `from __future__ import annotations` everywhere, no `print()`/`logger` calls (Phase 2 modules do no logging by design), 100-char line length, public function docstrings present.
+- Security: no secrets, no helper edits, no hardcoded credentials.
+
+---
+
 ## Fix Cycle History
 
 | Attempt | Type | Target | Description | Result |
