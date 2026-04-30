@@ -50,7 +50,7 @@
 ### Conductor
 
 - **Total Batches**: 8
-- **Current Batch**: 4
+- **Current Batch**: 5
 - **Pacing**: auto-refresh
 - **Batches Per Session**: 4
 - **Execution Plan**: docs/agent/project-start/EXECUTION_PLAN.md
@@ -58,16 +58,16 @@
 ---
 
 **Last Updated:** 2026-04-30
-**Current Phase:** 6 of 11
-**Phase Name:** Picker & CLI dispatcher
-**Progress:** 45% (5/11 phases complete)
+**Current Phase:** 7 of 11
+**Phase Name:** Verbs: attach, peek, ls
+**Progress:** 55% (6/11 phases complete)
 
 ---
 
 ## Progress Bar
 
 ```
-[#########-----------] 45% (5/11)
+[###########---------] 55% (6/11)
 ```
 
 ---
@@ -81,8 +81,8 @@
 | 3 | Sessions & host probes | `[Complete]` |
 | 4 | Ownership state | `[Complete]` |
 | 5 | Tmux integration & claude shim | `[Complete]` |
-| 6 | Picker & CLI dispatcher | `[Current]` |
-| 7 | Verbs: attach, peek, ls | `[Pending]` |
+| 6 | Picker & CLI dispatcher | `[Complete]` |
+| 7 | Verbs: attach, peek, ls | `[Current]` |
 | 8 | Verbs: claim, fork (incl. ssh-strict, --here) | `[Pending]` |
 | 9 | Sync mode & doctor | `[Pending]` |
 | 10 | Integration tests round 1 | `[Pending]` |
@@ -92,12 +92,12 @@
 
 ## Instructions for Agents
 
-Batch 4 runs Phase 6 sequentially under a worktree. The agent should:
+Batch 5 runs Phase 7 sequentially under a worktree. The agent should:
 
-1. Read `phase_plans/PHASE_06.md`
-2. Read the 2 most recent phase summaries (`summaries/PHASE_05_SUMMARY.md`, `summaries/PHASE_04_SUMMARY.md`) plus checkpoint summary (`summaries/CHECKPOINT_3_SUMMARY.md`)
+1. Read `phase_plans/PHASE_07.md`
+2. Read the 2 most recent phase summaries (`summaries/PHASE_06_SUMMARY.md`, `summaries/PHASE_05_SUMMARY.md`) plus checkpoint summary (`summaries/CHECKPOINT_4_SUMMARY.md`)
 3. Complete the phase following the build-verify-commit cycle
-4. Create `summaries/PHASE_06_SUMMARY.md`
+4. Create `summaries/PHASE_07_SUMMARY.md`
 5. Do NOT update STATUS.md, do NOT post to Jira, do NOT push -- the conductor handles all of that
 
 **Phase plans:** See `phase_plans/PHASE_XX.md`
