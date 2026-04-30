@@ -3,7 +3,7 @@
 > **Living document** -- each phase updates this with new discoveries and changes.
 > Read this before exploring the codebase. It may already have what you need.
 >
-> Last updated by: Checkpoint 3 - Phases 3, 4, 5 merged (2026-04-30)
+> Last updated by: Checkpoint 4 - Phase 6 merged (2026-04-30)
 
 ---
 
@@ -30,9 +30,9 @@ The full design lives at `docs/specs/2026-04-30-croam-design.md`. Phase 1 establ
 | `docs/specs/2026-04-30-croam-design.md` | Original design spec, sections 1-16 | Read for big-picture intent. Do NOT modify. |
 | `docs/agent/project-start/PROJECT_PLAN.md` | Phase overview, architecture, cross-cutting concerns | Read once at the start of a phase. |
 | `docs/agent/project-start/FUNCTIONAL_QA_STRATEGY.md` | Surfaces, user loops, anti-patterns, harness deliverables | Read in full when planning Functional QA checks. |
-| `pyproject.toml` | Project metadata, deps (typer, loguru), console script `croam = "croam.cli:app"`, tool configs (ruff, pyright, pytest) | Phase 1. |
+| `pyproject.toml` | Project metadata, deps (typer, loguru), console script `croam = "croam.cli:main"`, tool configs (ruff, pyright, pytest) | Phase 1; entry point updated by Phase 6 from `croam.cli:app` to `croam.cli:main`. |
 | `src/croam/__init__.py` | Package marker (empty) | Phase 1. |
-| `src/croam/cli.py` | typer stub with `@app.callback(invoke_without_command=True)`; Phase 6 replaces entirely | Phase 1 stub. |
+| `src/croam/cli.py` | Full typer app: 7 public verbs (ls, attach, peek, claim, fork, launch, doctor) + hidden emit-state, global callback with --debug/--json/--all/-p/--host/--last/--orphans, no-verb picker dispatch, `main()` CroamError->SystemExit(2) handler | Phase 6 (full rewrite from Phase 1 stub). 64% coverage (stubs account for gap). |
 | `src/croam/log.py` | `configure(level, log_file, debug)` for loguru; uses FilterDict-typed filter_map for pyright compat | Phase 1. |
 | `src/croam/errors.py` | `CroamError(Exception)` base + 7 subclasses: ConfigError, SshError, OwnershipConflict, TmuxError, SessionNotFound, OrphanRefused, TimeoutError | Phase 1. |
 | `src/croam/proc.py` | `run(argv, *, timeout, check, capture, env, cwd)` subprocess wrapper with DEBUG logging and TimeoutError translation | Phase 1. |
@@ -48,13 +48,15 @@ The full design lives at `docs/specs/2026-04-30-croam-design.md`. Phase 1 establ
 | `src/croam/tmux.py` | Five argv-builders + five side-effecting wrappers (has_session, new_session_detached, attach, kill_session, list_sessions) | Phase 5. 89% coverage. |
 | `src/croam/shim.py` | Pure decision functions: `should_wrap`, `derive_sid`, `strip_no_tmux`, `find_claude_real`, `is_in_tmux` | Phase 5. 100% coverage. |
 | `src/croam/commands/launch.py` | `LaunchPlan` dataclass, `build_launch_plan` (pure), `launch_cmd` orchestrator with `--no-exec` mode and assertion-before-side-effect contract | Phase 5. 95% coverage. |
-| `src/croam/picker.py` | fzf orchestration, row layout, multi-select intersection | Created in Phase 6. |
+| `src/croam/picker.py` | `PickerRow` dataclass, `format_last_column`, `compute_glyph`, `compute_status_word`, `render_rows`, `format_input_lines`, `build_fzf_argv`, `launch_picker`, `compute_action_intersection` | Phase 6. 91% coverage. |
+| `src/croam/commands/default.py` | `run_picker` orchestrator: discover -> filter -> render -> launch -> stub dispatch | Phase 6. Not directly covered yet (requires config + tty). |
 | `src/croam/sync.py` | syncthing mirror access (read-only filesystem); conflict file detection | Created in Phase 9. |
 | `src/croam/doctor.py` | Diagnostics: config + SSH + syncthing + ownership consistency | Created in Phase 9. |
 | `tests/conftest.py` | 5 fixtures (home, tmux_socket, ssh_shim, state_root, e2e_dummy) + `pytest_runtest_call` hookwrapper safety guard | Phase 1. |
 | `tests/_helpers/synth_jsonl.py` | `build_jsonl(home, sid, cwd)` with inlined `_encode_cwd` (standalone, no src/ deps) | Phase 1. |
 | `tests/_helpers/synth_session.py` | `build_session_metadata(home, pid, sid, cwd)` | Phase 1. |
 | `tests/_helpers/synth_assertions.py` | `build_assertion(sid, owner, asserted_at, ...)` and `write_assertions_file(state_root, hostname, assertions)` for test seeding | Phase 4. |
+| `tests/_helpers/fake_fzf.py` | `make_fake_fzf(tmp_path, output, exit_code)` generates executable shell scripts for deterministic fzf subprocess testing | Phase 6. |
 | `tests/_helpers/fake_ssh.py` | `SSH_SHIM_SCRIPT` + `fixture_path_for()` for argv-hashed fixture lookup | Phase 1. |
 | `tests/test_smoke.py` | 14 smoke tests covering all fixtures, log, errors, proc, safety guard | Phase 1. |
 | `tests/test_sessions.py` | 19 Tier-1 + 1 Tier-2 tests for session discovery and tmux_attached | Phase 3. |
@@ -63,6 +65,8 @@ The full design lives at `docs/specs/2026-04-30-croam-design.md`. Phase 1 establ
 | `tests/test_tmux.py` | 13 tests (argv builders + real tmux integration via tmux_socket) | Phase 5. |
 | `tests/test_shim.py` | 24 pure-function tests covering all branches of all five shim functions | Phase 5. |
 | `tests/test_launch.py` | 8 integration tests for build_launch_plan and launch_cmd (uses --no-exec and real tmux) | Phase 5. |
+| `tests/test_cli.py` | 5 tests for CLI surface: help verbs, hidden emit-state, emit-state wiring, debug flag, CroamError handler | Phase 6. |
+| `tests/test_picker.py` | 24 tests (10 parametrized format_last_column + 14 others) for picker pure functions and launch_picker subprocess | Phase 6. |
 | `tests/fixtures/` | Synthetic session JSONLs, ownership.json snapshots, sample TOML configs | Created across Phase 4, 7. |
 
 ---
@@ -333,30 +337,70 @@ Key design notes:
 - `launch_cmd` writes ownership assertion before tmux/exec (assertion-before-side-effect contract).
 - `attach` is `NoReturn` (calls `os.execvp`). The `test_launch_cmd_real_tmux` test patches it.
 
-### Phase 6 (picker & CLI dispatcher)
+### Phase 6 (picker & CLI dispatcher) -- FINALIZED
 
 ```python
 # src/croam/cli.py
+# Entry point: croam = "croam.cli:main" (pyproject.toml)
 import typer
-app = typer.Typer(name="croam", no_args_is_help=False, pretty_exceptions_enable=False, add_completion=False)
+app = typer.Typer(name="croam", no_args_is_help=False, pretty_exceptions_enable=False,
+                  add_completion=False, invoke_without_command=True)
+
+# Global callback wires: --debug, --json, --all/-A, -p, --host, --last, --orphans
+# No-verb path -> commands.default.run_picker (via load_config + dispatch)
+# main() catches CroamError -> SystemExit(2) with "croam: <msg>" on stderr
+# Note: SystemExit(2), NOT typer.Exit(2) -- typer.Exit outside click context yields exit code 1
+
+# 7 public verbs: ls, attach, peek, claim, fork, launch, doctor
+# 1 hidden verb: emit-state
+# Stubs raise NotImplementedError("Phase N") until filled by later phases
 
 # src/croam/picker.py
 @dataclass(frozen=True)
 class PickerRow:
-    sid: str
-    glyph: str           # "o" or "O"
-    status_word: str
-    reach_word: str
-    cwd_word: str        # "missing-cwd" or "present"
-    host: str
-    last: str
-    cwd_display: str
-    name: str
+    sid: str            # column 1 (hidden filter)
+    glyph: str          # column 2 (displayed) -- "o" reachable, "O" unreachable
+    status_word: str    # column 3 (hidden filter) -- "running-idle"|"running-busy"|"archived"|"unreachable"
+    reach_word: str     # column 4 (hidden filter) -- "reachable"|"unreachable"
+    cwd_word: str       # column 5 (hidden filter) -- "present"|"missing-cwd"
+    host: str           # column 6 (displayed)
+    last: str           # column 7 (displayed) -- "Nm"|"Nh"|"ND"|"NM"|"-"
+    cwd_display: str    # column 8 (displayed) -- "~/Programs/foo" (untruncated; fish-style TODO phase-11)
+    name: str           # column 9 (displayed) -- session name + lineage tag if forked
 
-def render_rows(sessions: list[ClaudeSession], assertions: dict[str, Assertion], host_status: dict[str, HostStatus], pwd: Path) -> list[PickerRow]: ...
-def launch_picker(rows: list[PickerRow], filter_pwd: Path | None) -> tuple[str | None, list[PickerRow]]:
-    """Returns (expect-key or None, selected rows). Empty key means plain Enter."""
+def format_last_column(updated_at_ms: int | None, now: datetime) -> str: ...
+def compute_glyph(host_status: HostStatus | None) -> str: ...
+def compute_status_word(session: ClaudeSession, host_status: HostStatus | None) -> str: ...
+def render_rows(sessions: list[ClaudeSession], assertions: dict[str, Assertion],
+                host_statuses: dict[str, HostStatus], pwd: Path | None,
+                lineage: dict[str, LineageEntry], *, now: datetime | None = None,
+                host_homes: dict[str, Path] | None = None) -> list[PickerRow]: ...
+def format_input_lines(rows: list[PickerRow]) -> str: ...
+def build_fzf_argv(filter_pwd: Path | None) -> list[str]: ...
+def launch_picker(rows: list[PickerRow], filter_pwd: Path | None, *,
+                  fzf_binary: str = "fzf",
+                  env_overrides: dict[str, str] | None = None) -> tuple[str, list[PickerRow]]:
+    """Returns (expect-key, selected rows). Empty key means plain Enter.
+    Empty rows -> ("", []) without launching fzf."""
+def compute_action_intersection(selected: list[PickerRow], *, self_hostname: str) -> set[str]:
+    """Universe: {"attach","peek","claim","fork","claim-here","fork-here"}.
+    Returns intersection of safe actions across all selected rows."""
+
+# src/croam/commands/default.py
+def run_picker(*, config: Config, home: Path, ctx_obj: dict) -> int:
+    """Orchestrate: discover -> filter -> render -> launch -> dispatch."""
 ```
+
+Wire-format invariant: `<sid>\t<glyph>\t<status_word>\t<reach_word>\t<cwd_word>\t<host>\t<last>\t<cwd_display>\t<name>\n`.
+fzf uses `--with-nth=2,6,7,8,9` (columns 1,3,4,5 hidden but searchable). `{1}` references sid in preview/binds.
+`$FZF_SELECT_COUNT` (NOT `FZF_SELECTED_COUNT`).
+`FZF_DEFAULT_OPTS=""` always set in launch_picker env to prevent user shell defaults from poisoning flags.
+
+Key design notes:
+- `main()` uses `SystemExit(2)` not `typer.Exit(2)` for CroamError translation (typer.Exit outside click context yields exit code 1)
+- `CliRunner()` in typer does not support `mix_stderr=False` (that's click-only)
+- `launch_picker` uses `stderr=None` (never `subprocess.PIPE`): fzf draws on /dev/tty
+- `_resolve_cwd` in render_rows uses `Path.home()` (redirected by tests via HOME env) unless host_homes dict provided
 
 ---
 
