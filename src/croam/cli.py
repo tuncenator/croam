@@ -109,15 +109,14 @@ def cmd_fork(
 @app.command("launch")
 def cmd_launch(ctx: typer.Context) -> None:
     """Wrap a claude invocation inside tmux (the shim entry point)."""
-    # Phase 5 owns commands/launch.py. If it exists, dispatch; else stub.
-    try:
-        from croam.commands import launch as launch_mod
-    except ImportError as exc:
-        raise NotImplementedError("Phase 5") from exc
+    from croam.commands import launch as launch_mod
+    from croam.config import load_config
+
+    config = load_config()
     raise typer.Exit(
         launch_mod.launch_cmd(
             argv=["claude"],
-            config=ctx.obj.get("_config"),  # type: ignore[arg-type]
+            config=config,
             home=Path.home(),
         )
     )

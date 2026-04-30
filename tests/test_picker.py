@@ -302,17 +302,41 @@ def test_launch_picker_happy_path(home, tmp_path, monkeypatch):
 
 
 def test_launch_picker_cancel(home, tmp_path, monkeypatch):
+    """rc=130 (Ctrl-C cancel) returns ("", []). Must actually launch the subprocess."""
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    dummy_row = PickerRow(
+        sid="cancel-sid",
+        glyph="o",
+        status_word="archived",
+        reach_word="reachable",
+        cwd_word="present",
+        host="h",
+        last="-",
+        cwd_display="~",
+        name="cancel-test",
+    )
     fake = make_fake_fzf(tmp_path, output="", exit_code=130)
-    key, selected = launch_picker([], filter_pwd=None, fzf_binary=str(fake))
+    key, selected = launch_picker([dummy_row], filter_pwd=None, fzf_binary=str(fake))
     assert key == ""
     assert selected == []
 
 
 def test_launch_picker_no_match(home, tmp_path, monkeypatch):
+    """rc=1 (no match) returns ("", []). Must actually launch the subprocess."""
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    dummy_row = PickerRow(
+        sid="nomatch-sid",
+        glyph="o",
+        status_word="archived",
+        reach_word="reachable",
+        cwd_word="present",
+        host="h",
+        last="-",
+        cwd_display="~",
+        name="nomatch-test",
+    )
     fake = make_fake_fzf(tmp_path, output="", exit_code=1)
-    key, selected = launch_picker([], filter_pwd=None, fzf_binary=str(fake))
+    key, selected = launch_picker([dummy_row], filter_pwd=None, fzf_binary=str(fake))
     assert key == ""
     assert selected == []
 

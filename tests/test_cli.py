@@ -1,7 +1,8 @@
 """Tests for src/croam/cli.py.
 
-Phase 6: 5 tests covering help output, hidden command, emit-state wiring,
-debug flag wiring, and top-level CroamError -> typer.Exit(2) handler.
+Phase 6: 6 tests covering help output, hidden command, emit-state wiring,
+debug flag wiring, top-level CroamError -> typer.Exit(2) handler, and
+cmd_launch config plumbing.
 """
 
 from __future__ import annotations
@@ -77,3 +78,33 @@ def test_top_level_croam_error_handler(home):
     )
     assert result.returncode == 2
     assert "croam:" in result.stderr
+
+
+def test_cmd_launch_uses_config(home, state_root, runner, monkeypatch):
+    """cmd_launch passes a real Config (not None) to launch_cmd.
+
+    Monkey-patch launch_cmd to capture its kwargs. If someone re-introduces
+    the None-config bug, the assertion on config type will fail.
+    """
+    from croam.config import Config
+
+    # Write a minimal config so load_config() succeeds.
+    cfg = home / ".config" / "croam" / "config.toml"
+    cfg.write_text('[self]\nhostname = "stormtree"\n\n[hosts.stormtree]\nssh = "stormtree"\n')
+
+    captured: dict = {}
+
+    def fake_launch_cmd(argv, config, home, **kwargs):
+        captured["config"] = config
+        captured["argv"] = argv
+        captured["home"] = home
+        return 0
+
+    monkeypatch.setattr("croam.commands.launch.launch_cmd", fake_launch_cmd)
+
+    result = runner.invoke(app, ["launch"])
+    assert result.exit_code == 0, f"output: {result.output}"
+    assert "config" in captured, "launch_cmd was never called"
+    assert isinstance(captured["config"], Config), (
+        f"expected Config, got {type(captured['config'])}"
+    )
