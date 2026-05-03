@@ -21,8 +21,7 @@ from croam.sessions import ClaudeSession, discover_local_sessions
 def run_picker(*, config: Config, home: Path, ctx_obj: dict) -> int:
     """Orchestrate: discover -> render -> launch -> dispatch.
 
-    Phase 6 ships discover + render + launch. The dispatch table is filled in by Phase 7+;
-    for now, every result raises NotImplementedError or returns 0 (after logging).
+    Phase 6 ships discover + render + launch. Phase 7 fills in the dispatch table.
     """
     # 1. Discover.
     sessions = discover_local_sessions(home)
@@ -69,10 +68,16 @@ def run_picker(*, config: Config, home: Path, ctx_obj: dict) -> int:
     # 4. Launch.
     expect_key, selected = picker_mod.launch_picker(rows=rows, filter_pwd=None)
 
-    # 5. Dispatch (Phase 7+ fills this in).
+    # 5. Dispatch.
     if not selected:
         return 0  # cancel
-    return _dispatch(expect_key=expect_key, selected=selected, ctx_obj=ctx_obj)
+    return _dispatch(
+        expect_key=expect_key,
+        selected=selected,
+        ctx_obj=ctx_obj,
+        config=config,
+        home=home,
+    )
 
 
 def _apply_filters(
@@ -88,7 +93,74 @@ def _apply_filters(
     return [s for s in sessions if s.sid in assertions]  # exclude orphans by default
 
 
-def _dispatch(*, expect_key: str, selected: list[picker_mod.PickerRow], ctx_obj: dict) -> int:
-    """Phase 6: stub. Phase 7 maps expect_key -> verb.run()."""
-    logger.info("picker selected expect_key={!r} n={}", expect_key, len(selected))
-    raise NotImplementedError("Phase 7 wires the dispatch table")
+def _dispatch(
+    *,
+    expect_key: str,
+    selected: list[picker_mod.PickerRow],
+    ctx_obj: dict,
+    config: Config,
+    home: Path,
+) -> int:
+    """Map fzf expect_key + selected rows to the right verb.
+
+    Single-row dispatch:
+      enter ("")  -> attach
+      "p"         -> peek
+      "ctrl-r"    -> re-run run_picker
+      "c"         -> Phase 8: claim
+      "f"         -> Phase 8: fork
+      "C"         -> Phase 8: claim --here
+      "F"         -> Phase 8: fork --here
+
+    Multi-row dispatch:
+      compute_action_intersection, refuse if key not in intersection, else iterate.
+    """
+    from croam.commands import attach, peek
+
+    logger.info("picker dispatch expect_key={!r} n={}", expect_key, len(selected))
+
+    if expect_key == "ctrl-r":
+        return run_picker(config=config, home=home, ctx_obj=ctx_obj)
+
+    # Phase 8 stubs.
+    if expect_key in ("c", "C"):
+        raise NotImplementedError("Phase 8: claim")
+    if expect_key in ("f", "F"):
+        raise NotImplementedError("Phase 8: fork")
+
+    if len(selected) == 1:
+        sid = selected[0].sid
+        if expect_key == "":
+            return attach.run(sid, ctx_obj, config, home)
+        if expect_key == "p":
+            return peek.run(sid, ctx_obj, config, home)
+        # Unrecognised key: fall through to 0 (safe default).
+        logger.warning("picker: unknown expect_key={!r}; ignoring", expect_key)
+        return 0
+
+    # Multi-row: compute intersection of allowed actions.
+    allowed = picker_mod.compute_action_intersection(selected, self_hostname=config.self_hostname)
+    if expect_key == "":
+        key_action = "attach"
+    elif expect_key == "p":
+        key_action = "peek"
+    else:
+        logger.warning("picker: multi-row with unknown key={!r}; ignoring", expect_key)
+        return 0
+
+    if key_action not in allowed:
+        logger.warning(
+            "picker: action={!r} not in intersection={!r} for {} rows; ignoring",
+            key_action,
+            allowed,
+            len(selected),
+        )
+        return 0
+
+    rc = 0
+    for row in selected:
+        if key_action == "attach":
+            rc = attach.run(row.sid, ctx_obj, config, home)
+        elif key_action == "peek":
+            rc = peek.run(row.sid, ctx_obj, config, home)
+    return rc

@@ -49,6 +49,7 @@ def run(
 
     if sid is None:
         from croam.commands import default as default_mod
+
         return default_mod.run_picker(config=config, home=home, ctx_obj=ctx_obj)
 
     sock_env = os.environ.get("CROAM_TMUX_SOCK")

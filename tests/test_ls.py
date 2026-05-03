@@ -22,18 +22,16 @@ def runner():
 def _write_config(home: Path, hostname: str = "stormtree", extra_hosts: str = "") -> Path:
     """Write a minimal config.toml. Returns config path."""
     cfg = home / ".config" / "croam" / "config.toml"
-    content = (
-        f'[self]\nhostname = "{hostname}"\n\n'
-        f'[hosts.{hostname}]\nssh = "{hostname}"\n'
-    )
+    content = f'[self]\nhostname = "{hostname}"\n\n[hosts.{hostname}]\nssh = "{hostname}"\n'
     if extra_hosts:
         content += extra_hosts
     cfg.write_text(content)
     return cfg
 
 
-def _seed_session(home: Path, state_root: Path, hostname: str, cwd: Path, *,
-                  updated_at_ms: int | None = None) -> str:
+def _seed_session(
+    home: Path, state_root: Path, hostname: str, cwd: Path, *, updated_at_ms: int | None = None
+) -> str:
     """Create a synthetic JSONL + assertion, return sid."""
     from tests._helpers.synth_assertions import build_assertion, write_assertions_file
     from tests._helpers.synth_jsonl import build_jsonl
@@ -57,6 +55,7 @@ def _seed_session(home: Path, state_root: Path, hostname: str, cwd: Path, *,
     ownership_path = state_root / hostname / "ownership.json"
     if ownership_path.exists():
         from croam.ownership import read_local_assertions
+
         existing = dict(read_local_assertions(state_root, hostname))
     existing[sid] = assertion
     write_assertions_file(state_root, hostname, existing)
@@ -107,8 +106,16 @@ def test_ls_json_one_local(home: Path, state_root: Path, runner, monkeypatch: py
     rows = json.loads(result.output)
     assert len(rows) == 1
     row = rows[0]
-    for key in ("sid", "owner", "host_reachable", "status", "cwd", "last_activity",
-                "is_orphan", "name"):
+    for key in (
+        "sid",
+        "owner",
+        "host_reachable",
+        "status",
+        "cwd",
+        "last_activity",
+        "is_orphan",
+        "name",
+    ):
         assert key in row, f"missing key {key!r}"
     assert row["sid"] == sid
     assert row["owner"] == "stormtree"
@@ -170,7 +177,7 @@ def test_ls_filter_pwd(home: Path, state_root: Path, runner, monkeypatch: pytest
 def test_ls_all_flag(home: Path, state_root: Path, runner):
     """--all: reads ownership from all host subdirs, returns entries from both."""
     # Config with two hosts
-    cfg_extra = "\n[hosts.vicar]\nssh = \"vicar\"\n"
+    cfg_extra = '\n[hosts.vicar]\nssh = "vicar"\n'
     _write_config(home, extra_hosts=cfg_extra)
 
     cwd_a = home / "proj_a"
@@ -179,6 +186,7 @@ def test_ls_all_flag(home: Path, state_root: Path, runner):
 
     # Seed a vicar assertion directly
     from tests._helpers.synth_assertions import build_assertion, write_assertions_file
+
     sid_vicar = str(uuid.uuid4())
     # Create vicar dir and seed ownership
     (state_root / "vicar").mkdir(parents=True, exist_ok=True)
@@ -205,7 +213,7 @@ def test_ls_all_flag(home: Path, state_root: Path, runner):
 
 def test_ls_host_filter(home: Path, state_root: Path, runner):
     """--host vicar: returns only vicar entries."""
-    cfg_extra = "\n[hosts.vicar]\nssh = \"vicar\"\n"
+    cfg_extra = '\n[hosts.vicar]\nssh = "vicar"\n'
     _write_config(home, extra_hosts=cfg_extra)
 
     cwd_a = home / "proj_a"
@@ -213,6 +221,7 @@ def test_ls_host_filter(home: Path, state_root: Path, runner):
     _sid_local = _seed_session(home, state_root, "stormtree", cwd_a)
 
     from tests._helpers.synth_assertions import build_assertion, write_assertions_file
+
     sid_vicar = str(uuid.uuid4())
     (state_root / "vicar").mkdir(parents=True, exist_ok=True)
     vicar_assertion = build_assertion(
@@ -235,8 +244,9 @@ def test_ls_host_filter(home: Path, state_root: Path, runner):
 # ---------------------------------------------------------------------------
 
 
-def test_ls_orphans_hidden_by_default(home: Path, state_root: Path, runner,
-                                       monkeypatch: pytest.MonkeyPatch):
+def test_ls_orphans_hidden_by_default(
+    home: Path, state_root: Path, runner, monkeypatch: pytest.MonkeyPatch
+):
     """JSONL on disk with no assertion -> empty list without --orphans."""
     _write_config(home)
     cwd = home / "proj"
@@ -244,6 +254,7 @@ def test_ls_orphans_hidden_by_default(home: Path, state_root: Path, runner,
     monkeypatch.chdir(cwd)
 
     from tests._helpers.synth_jsonl import build_jsonl
+
     _sid = str(uuid.uuid4())
     build_jsonl(home, _sid, cwd)  # no assertion written
 
@@ -258,8 +269,9 @@ def test_ls_orphans_hidden_by_default(home: Path, state_root: Path, runner,
 # ---------------------------------------------------------------------------
 
 
-def test_ls_orphans_with_flag(home: Path, state_root: Path, runner,
-                               monkeypatch: pytest.MonkeyPatch):
+def test_ls_orphans_with_flag(
+    home: Path, state_root: Path, runner, monkeypatch: pytest.MonkeyPatch
+):
     """--orphans shows orphan JSONL with is_orphan=True and owner=None."""
     _write_config(home)
     cwd = home / "proj"
@@ -267,6 +279,7 @@ def test_ls_orphans_with_flag(home: Path, state_root: Path, runner,
     monkeypatch.chdir(cwd)
 
     from tests._helpers.synth_jsonl import build_jsonl
+
     sid = str(uuid.uuid4())
     build_jsonl(home, sid, cwd)
 
@@ -294,10 +307,8 @@ def test_ls_last_window(home: Path, state_root: Path, runner):
     ten_days_ago_ms = int((now - timedelta(days=10)).timestamp() * 1000)
     hundred_days_ago_ms = int((now - timedelta(days=100)).timestamp() * 1000)
 
-    sid_recent = _seed_session(home, state_root, "stormtree", cwd,
-                               updated_at_ms=ten_days_ago_ms)
-    _sid_old = _seed_session(home, state_root, "stormtree", cwd,
-                              updated_at_ms=hundred_days_ago_ms)
+    sid_recent = _seed_session(home, state_root, "stormtree", cwd, updated_at_ms=ten_days_ago_ms)
+    _sid_old = _seed_session(home, state_root, "stormtree", cwd, updated_at_ms=hundred_days_ago_ms)
 
     result = runner.invoke(app, ["--all", "--last", "30", "--json", "ls"])
     assert result.exit_code == 0, result.output

@@ -21,18 +21,14 @@ def runner():
 
 def _write_config(home: Path, hostname: str = "stormtree", extra_hosts: str = "") -> Path:
     cfg = home / ".config" / "croam" / "config.toml"
-    content = (
-        f'[self]\nhostname = "{hostname}"\n\n'
-        f'[hosts.{hostname}]\nssh = "{hostname}"\n'
-    )
+    content = f'[self]\nhostname = "{hostname}"\n\n[hosts.{hostname}]\nssh = "{hostname}"\n'
     if extra_hosts:
         content += extra_hosts
     cfg.write_text(content)
     return cfg
 
 
-def _seed_local_assertion(home: Path, state_root: Path, cwd: Path,
-                           owner: str = "stormtree") -> str:
+def _seed_local_assertion(home: Path, state_root: Path, cwd: Path, owner: str = "stormtree") -> str:
     """Create a synthetic JSONL + local assertion, return sid."""
     from tests._helpers.synth_assertions import build_assertion, write_assertions_file
     from tests._helpers.synth_jsonl import build_jsonl
@@ -51,6 +47,7 @@ def _seed_local_assertion(home: Path, state_root: Path, cwd: Path,
     existing = {}
     if ownership_path.exists():
         from croam.ownership import read_local_assertions
+
         existing = dict(read_local_assertions(state_root, owner))
     existing[sid] = assertion
     write_assertions_file(state_root, owner, existing)
@@ -62,8 +59,9 @@ def _seed_local_assertion(home: Path, state_root: Path, cwd: Path,
 # ---------------------------------------------------------------------------
 
 
-def test_attach_local_session_running(home: Path, state_root: Path, runner,
-                                       tmux_socket: Path, monkeypatch: pytest.MonkeyPatch):
+def test_attach_local_session_running(
+    home: Path, state_root: Path, runner, tmux_socket: Path, monkeypatch: pytest.MonkeyPatch
+):
     """Pre-create tmux session; --no-exec -> tmux-attach plan."""
     _write_config(home)
     cwd = home / "proj"
@@ -78,8 +76,9 @@ def test_attach_local_session_running(home: Path, state_root: Path, runner,
     monkeypatch.setenv("CROAM_TMUX_SOCK", str(tmux_socket))
 
     result = runner.invoke(app, ["attach", sid, "--no-exec"])
-    subprocess.run(["tmux", "-S", str(tmux_socket), "kill-session", "-t", session_name],
-                   check=False)
+    subprocess.run(
+        ["tmux", "-S", str(tmux_socket), "kill-session", "-t", session_name], check=False
+    )
 
     assert result.exit_code == 0, result.output
     plan = json.loads(result.output)
@@ -93,8 +92,9 @@ def test_attach_local_session_running(home: Path, state_root: Path, runner,
 # ---------------------------------------------------------------------------
 
 
-def test_attach_local_session_archived(home: Path, state_root: Path, runner,
-                                        tmux_socket: Path, monkeypatch: pytest.MonkeyPatch):
+def test_attach_local_session_archived(
+    home: Path, state_root: Path, runner, tmux_socket: Path, monkeypatch: pytest.MonkeyPatch
+):
     """No pre-existing tmux -> tmux-new-and-attach plan with correct argv tail."""
     _write_config(home)
     cwd = home / "proj"
@@ -122,10 +122,16 @@ def test_attach_local_session_archived(home: Path, state_root: Path, runner,
 # ---------------------------------------------------------------------------
 
 
-def test_attach_remote_reachable(home: Path, state_root: Path, runner,
-                                  ssh_shim, tmux_socket: Path, monkeypatch: pytest.MonkeyPatch):
+def test_attach_remote_reachable(
+    home: Path,
+    state_root: Path,
+    runner,
+    ssh_shim,
+    tmux_socket: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
     """ssh_shim ok -> ssh-recurse plan with --here-on-owner."""
-    cfg_extra = "\n[hosts.vicar]\nssh = \"vicar\"\n"
+    cfg_extra = '\n[hosts.vicar]\nssh = "vicar"\n'
     _write_config(home, extra_hosts=cfg_extra)
 
     cwd = home / "proj"
@@ -133,6 +139,7 @@ def test_attach_remote_reachable(home: Path, state_root: Path, runner,
 
     # Seed assertion owned by vicar.
     from tests._helpers.synth_assertions import build_assertion, write_assertions_file
+
     sid = str(uuid.uuid4())
     assertion = build_assertion(sid, "vicar", datetime.now(UTC), cwd_normalized="~/proj")
     (state_root / "vicar").mkdir(parents=True, exist_ok=True)
@@ -157,13 +164,15 @@ def test_attach_remote_reachable(home: Path, state_root: Path, runner,
 # ---------------------------------------------------------------------------
 
 
-def test_attach_remote_unreachable(home: Path, state_root: Path, ssh_shim,
-                                    monkeypatch: pytest.MonkeyPatch):
+def test_attach_remote_unreachable(
+    home: Path, state_root: Path, ssh_shim, monkeypatch: pytest.MonkeyPatch
+):
     """ssh_shim fails -> exit 2, stderr has 'origin vicar unreachable' and 'croam peek'."""
-    cfg_extra = "\n[hosts.vicar]\nssh = \"vicar\"\n"
+    cfg_extra = '\n[hosts.vicar]\nssh = "vicar"\n'
     _write_config(home, extra_hosts=cfg_extra)
 
     from tests._helpers.synth_assertions import build_assertion, write_assertions_file
+
     sid = str(uuid.uuid4())
     assertion = build_assertion(sid, "vicar", datetime.now(UTC), cwd_normalized="~/proj")
     (state_root / "vicar").mkdir(parents=True, exist_ok=True)
@@ -172,6 +181,7 @@ def test_attach_remote_unreachable(home: Path, state_root: Path, ssh_shim,
     ssh_shim.register("vicar", ["true"], exit_code=1)
 
     import sys
+
     proc = subprocess.run(
         [sys.executable, "-c", "from croam.cli import main; main()", "attach", sid],
         capture_output=True,
@@ -188,13 +198,15 @@ def test_attach_remote_unreachable(home: Path, state_root: Path, ssh_shim,
 # ---------------------------------------------------------------------------
 
 
-def test_attach_recursion_guard(home: Path, state_root: Path, runner,
-                                 tmux_socket: Path, monkeypatch: pytest.MonkeyPatch):
+def test_attach_recursion_guard(
+    home: Path, state_root: Path, runner, tmux_socket: Path, monkeypatch: pytest.MonkeyPatch
+):
     """--here-on-owner: ownership says vicar but action starts with 'tmux-' not 'ssh-recurse'."""
-    cfg_extra = "\n[hosts.vicar]\nssh = \"vicar\"\n"
+    cfg_extra = '\n[hosts.vicar]\nssh = "vicar"\n'
     _write_config(home, extra_hosts=cfg_extra)
 
     from tests._helpers.synth_assertions import build_assertion, write_assertions_file
+
     sid = str(uuid.uuid4())
     assertion = build_assertion(sid, "vicar", datetime.now(UTC), cwd_normalized="~/proj")
     (state_root / "vicar").mkdir(parents=True, exist_ok=True)
@@ -219,6 +231,7 @@ def test_attach_sid_not_found(home: Path, state_root: Path):
     sid = str(uuid.uuid4())
 
     import sys
+
     proc = subprocess.run(
         [sys.executable, "-c", "from croam.cli import main; main()", "attach", sid],
         capture_output=True,
@@ -234,7 +247,9 @@ def test_attach_sid_not_found(home: Path, state_root: Path):
 # ---------------------------------------------------------------------------
 
 
-def test_attach_picker_fallback(home: Path, state_root: Path, runner, monkeypatch: pytest.MonkeyPatch):
+def test_attach_picker_fallback(
+    home: Path, state_root: Path, runner, monkeypatch: pytest.MonkeyPatch
+):
     """No sid -> delegates to run_picker; monkeypatched to return 42 -> exit 42."""
     _write_config(home)
     monkeypatch.setattr("croam.commands.default.run_picker", lambda **kw: 42)

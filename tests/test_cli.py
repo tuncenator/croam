@@ -49,11 +49,12 @@ def test_emit_state_runs(home, state_root, runner, monkeypatch):
     assert isinstance(payload, dict)
 
 
-def test_global_debug_flag(home, runner):
-    """--debug bumps logging level. ls raises NotImplementedError(Phase 7); that's expected."""
+def test_global_debug_flag(home, state_root, runner):
+    """--debug bumps logging level; ls now works (Phase 7 replaced Phase 6 stub)."""
+    cfg = home / ".config" / "croam" / "config.toml"
+    cfg.write_text('[self]\nhostname = "stormtree"\n\n[hosts.stormtree]\nssh = "stormtree"\n')
     result = runner.invoke(app, ["--debug", "ls"])
-    assert result.exception is not None
-    assert isinstance(result.exception, NotImplementedError)
+    assert result.exit_code == 0, f"output: {result.output}"
 
 
 def test_top_level_croam_error_handler(home):

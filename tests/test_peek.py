@@ -21,10 +21,7 @@ def runner():
 
 def _write_config(home: Path, hostname: str = "stormtree", extra_hosts: str = "") -> Path:
     cfg = home / ".config" / "croam" / "config.toml"
-    content = (
-        f'[self]\nhostname = "{hostname}"\n\n'
-        f'[hosts.{hostname}]\nssh = "{hostname}"\n'
-    )
+    content = f'[self]\nhostname = "{hostname}"\n\n[hosts.{hostname}]\nssh = "{hostname}"\n'
     if extra_hosts:
         content += extra_hosts
     cfg.write_text(content)
@@ -68,8 +65,9 @@ def _seed_remote_assertion(state_root: Path, owner: str, sid: str, cwd_normalize
 # ---------------------------------------------------------------------------
 
 
-def test_peek_local_live(home: Path, state_root: Path, runner, tmux_socket: Path,
-                          monkeypatch: pytest.MonkeyPatch):
+def test_peek_local_live(
+    home: Path, state_root: Path, runner, tmux_socket: Path, monkeypatch: pytest.MonkeyPatch
+):
     """Local session with live tmux -> tmux-peek with attach -r -t."""
     _write_config(home)
     cwd = home / "proj"
@@ -86,8 +84,9 @@ def test_peek_local_live(home: Path, state_root: Path, runner, tmux_socket: Path
     monkeypatch.setenv("CROAM_TMUX_SOCK", str(tmux_socket))
 
     result = runner.invoke(app, ["peek", sid, "--no-exec"])
-    subprocess.run(["tmux", "-S", str(tmux_socket), "kill-session", "-t", session_name],
-                   check=False)
+    subprocess.run(
+        ["tmux", "-S", str(tmux_socket), "kill-session", "-t", session_name], check=False
+    )
 
     assert result.exit_code == 0, result.output
     plan = json.loads(result.output)
@@ -103,8 +102,9 @@ def test_peek_local_live(home: Path, state_root: Path, runner, tmux_socket: Path
 # ---------------------------------------------------------------------------
 
 
-def test_peek_local_archived(home: Path, state_root: Path, runner, tmux_socket: Path,
-                              monkeypatch: pytest.MonkeyPatch):
+def test_peek_local_archived(
+    home: Path, state_root: Path, runner, tmux_socket: Path, monkeypatch: pytest.MonkeyPatch
+):
     """Local session with no tmux -> static-transcript, path ends with <sid>.jsonl."""
     _write_config(home)
     cwd = home / "proj"
@@ -125,8 +125,9 @@ def test_peek_local_archived(home: Path, state_root: Path, runner, tmux_socket: 
 # ---------------------------------------------------------------------------
 
 
-def test_peek_local_archived_renders(home: Path, state_root: Path, runner, tmux_socket: Path,
-                                     monkeypatch: pytest.MonkeyPatch):
+def test_peek_local_archived_renders(
+    home: Path, state_root: Path, runner, tmux_socket: Path, monkeypatch: pytest.MonkeyPatch
+):
     """No tmux: actually render transcript, stdout has [user] twice (n_user=2)."""
     _write_config(home)
     cwd = home / "proj"
@@ -145,10 +146,16 @@ def test_peek_local_archived_renders(home: Path, state_root: Path, runner, tmux_
 # ---------------------------------------------------------------------------
 
 
-def test_peek_remote_reachable_recurses(home: Path, state_root: Path, runner,
-                                         tmux_socket: Path, ssh_shim, monkeypatch: pytest.MonkeyPatch):
+def test_peek_remote_reachable_recurses(
+    home: Path,
+    state_root: Path,
+    runner,
+    tmux_socket: Path,
+    ssh_shim,
+    monkeypatch: pytest.MonkeyPatch,
+):
     """Remote reachable -> ssh-recurse with --here-on-owner."""
-    cfg_extra = "\n[hosts.vicar]\nssh = \"vicar\"\n"
+    cfg_extra = '\n[hosts.vicar]\nssh = "vicar"\n'
     _write_config(home, extra_hosts=cfg_extra)
 
     sid = str(uuid.uuid4())
@@ -172,10 +179,11 @@ def test_peek_remote_reachable_recurses(home: Path, state_root: Path, runner,
 # ---------------------------------------------------------------------------
 
 
-def test_peek_remote_unreachable_via_mirror(home: Path, state_root: Path, runner,
-                                             ssh_shim, monkeypatch: pytest.MonkeyPatch):
+def test_peek_remote_unreachable_via_mirror(
+    home: Path, state_root: Path, runner, ssh_shim, monkeypatch: pytest.MonkeyPatch
+):
     """Remote unreachable, mirror exists -> static-transcript-mirror action returned."""
-    cfg_extra = "\n[hosts.vicar]\nssh = \"vicar\"\nhome = \"/tmp/vicar-home\"\n"
+    cfg_extra = '\n[hosts.vicar]\nssh = "vicar"\nhome = "/tmp/vicar-home"\n'
     _write_config(home, extra_hosts=cfg_extra)
 
     sid = str(uuid.uuid4())
@@ -187,6 +195,7 @@ def test_peek_remote_unreachable_via_mirror(home: Path, state_root: Path, runner
 
     # Build the mirror JSONL at state_root/vicar/projects/<encoded>/<sid>.jsonl
     from croam.paths import encode_cwd
+
     vicar_home = Path("/tmp/vicar-home")
     cwd_abs = vicar_home / "proj"
     encoded = encode_cwd(cwd_abs)
@@ -211,10 +220,11 @@ def test_peek_remote_unreachable_via_mirror(home: Path, state_root: Path, runner
 # ---------------------------------------------------------------------------
 
 
-def test_peek_remote_unreachable_no_mirror(home: Path, state_root: Path, ssh_shim,
-                                            monkeypatch: pytest.MonkeyPatch):
+def test_peek_remote_unreachable_no_mirror(
+    home: Path, state_root: Path, ssh_shim, monkeypatch: pytest.MonkeyPatch
+):
     """Remote unreachable, no mirror -> exit 2, stderr has 'unreachable'."""
-    cfg_extra = "\n[hosts.vicar]\nssh = \"vicar\"\nhome = \"/tmp/vicar-home\"\n"
+    cfg_extra = '\n[hosts.vicar]\nssh = "vicar"\nhome = "/tmp/vicar-home"\n'
     _write_config(home, extra_hosts=cfg_extra)
 
     sid = str(uuid.uuid4())
@@ -224,6 +234,7 @@ def test_peek_remote_unreachable_no_mirror(home: Path, state_root: Path, ssh_shi
 
     # Use subprocess to invoke main() so CroamError -> SystemExit(2) is triggered.
     import sys
+
     env = {**__import__("os").environ, "HOME": str(home)}
     proc = subprocess.run(
         [sys.executable, "-c", "from croam.cli import main; main()", "peek", sid],
@@ -246,6 +257,7 @@ def test_peek_sid_not_found(home: Path, state_root: Path):
     sid = str(uuid.uuid4())
 
     import sys
+
     proc = subprocess.run(
         [sys.executable, "-c", "from croam.cli import main; main()", "peek", sid],
         capture_output=True,

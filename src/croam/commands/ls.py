@@ -44,9 +44,7 @@ def _session_row(
 
     if isinstance(session, ClaudeSession):
         if session.updated_at_ms is not None:
-            last_activity = datetime.fromtimestamp(
-                session.updated_at_ms / 1000, tz=UTC
-            ).isoformat()
+            last_activity = datetime.fromtimestamp(session.updated_at_ms / 1000, tz=UTC).isoformat()
         status = session.status
         name = session.name
         if cwd is None:
@@ -78,8 +76,14 @@ def run(
     last_days: int | None = ctx_obj.get("last")
     orphans_only: bool = ctx_obj.get("orphans", False)
 
-    logger.info("ls: json={} all={} host={} last={} orphans={}", json_mode, all_mode,
-                host_filter, last_days, orphans_only)
+    logger.info(
+        "ls: json={} all={} host={} last={} orphans={}",
+        json_mode,
+        all_mode,
+        host_filter,
+        last_days,
+        orphans_only,
+    )
 
     # 1. Discover local sessions.
     sessions = discover_local_sessions(home)
@@ -128,6 +132,7 @@ def run(
                 assertion = merged.get(sid)
                 if isinstance(assertion, object) and hasattr(assertion, "asserted_at"):
                     from croam.ownership import Assertion
+
                     if isinstance(assertion, Assertion):
                         last_ms = int(assertion.asserted_at.timestamp() * 1000)
             if last_ms is not None:
@@ -144,6 +149,7 @@ def run(
             assertion = merged.get(sid)
             if assertion is not None:
                 from croam.ownership import Assertion
+
                 if isinstance(assertion, Assertion):
                     try:
                         session_cwd = denormalize_cwd(assertion.cwd_normalized, home)

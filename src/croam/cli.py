@@ -84,8 +84,9 @@ def cmd_attach(
 
     config = load_config()
     raise typer.Exit(
-        attach_mod.run(sid, ctx.obj, config, Path.home(),
-                       here_on_owner=here_on_owner, no_exec=no_exec)
+        attach_mod.run(
+            sid, ctx.obj, config, Path.home(), here_on_owner=here_on_owner, no_exec=no_exec
+        )
     )
 
 
@@ -102,8 +103,9 @@ def cmd_peek(
 
     config = load_config()
     raise typer.Exit(
-        peek_mod.run(sid, ctx.obj, config, Path.home(),
-                     here_on_owner=here_on_owner, no_exec=no_exec)
+        peek_mod.run(
+            sid, ctx.obj, config, Path.home(), here_on_owner=here_on_owner, no_exec=no_exec
+        )
     )
 
 

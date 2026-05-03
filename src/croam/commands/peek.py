@@ -51,22 +51,18 @@ def run(
     sock_env = os.environ.get("CROAM_TMUX_SOCK")
     sock: Path | None = Path(sock_env) if sock_env else None
 
+    # Always read merged assertions once -- needed for cwd resolution in all branches.
+    per_host = read_all_assertions(config.storage.state_root)
+    merged = merge_assertions(per_host)
+    assertion = merged.get(sid)  # may be None for here_on_owner if not in merged
+
     # Resolve owner.
     if here_on_owner:
         owner = config.self_hostname
     else:
-        per_host = read_all_assertions(config.storage.state_root)
-        merged = merge_assertions(per_host)
         if sid not in merged:
             raise SessionNotFound(f"session {sid!r} not found in any ownership records")
         owner = merged[sid].owner
-        assertion = merged[sid]
-
-    if here_on_owner:
-        # Re-read to get the assertion for cwd.
-        per_host_local = read_all_assertions(config.storage.state_root)
-        merged_local = merge_assertions(per_host_local)
-        assertion = merged_local.get(sid)
 
     is_local = here_on_owner or (owner == config.self_hostname)
 
@@ -112,7 +108,8 @@ def run(
             )
             return 0
         from croam.transcript import render_static_transcript
-        return render_static_transcript(transcript_path)
+
+        return render_static_transcript(transcript_path, fp=sys.stdout)
 
     # Remote owner.
     probe = probe_reachability([owner])
@@ -132,12 +129,10 @@ def run(
     # Remote + unreachable: try mirror.
     mirror_path: Path | None = None
     if assertion is not None:
+        host_entry = config.hosts.get(owner)
+        owner_home: Path = host_entry.home if (host_entry is not None and host_entry.home is not None) else home
         try:
-            cwd_abs = denormalize_cwd(
-                assertion.cwd_normalized,
-                config.hosts[owner].home if owner in config.hosts and config.hosts[owner].home
-                else home,
-            )
+            cwd_abs = denormalize_cwd(assertion.cwd_normalized, owner_home)
             encoded = encode_cwd(cwd_abs)
             mirror_path = (
                 config.storage.state_root / owner / "projects" / encoded / f"{sid}.jsonl"
@@ -154,7 +149,8 @@ def run(
             )
             return 0
         from croam.transcript import render_static_transcript
-        return render_static_transcript(mirror_path)
+
+        return render_static_transcript(mirror_path, fp=sys.stdout)
 
     raise SshError(
         f"origin {owner} unreachable and no mirror found for session {sid!r}; "
