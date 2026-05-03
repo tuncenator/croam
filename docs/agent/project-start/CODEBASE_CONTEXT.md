@@ -3,7 +3,7 @@
 > **Living document** -- each phase updates this with new discoveries and changes.
 > Read this before exploring the codebase. It may already have what you need.
 >
-> Last updated by: Checkpoint 4 - Phase 6 merged (2026-04-30)
+> Last updated by: Checkpoint 5 - Phase 7 merged (2026-05-04)
 
 ---
 
@@ -32,7 +32,7 @@ The full design lives at `docs/specs/2026-04-30-croam-design.md`. Phase 1 establ
 | `docs/agent/project-start/FUNCTIONAL_QA_STRATEGY.md` | Surfaces, user loops, anti-patterns, harness deliverables | Read in full when planning Functional QA checks. |
 | `pyproject.toml` | Project metadata, deps (typer, loguru), console script `croam = "croam.cli:main"`, tool configs (ruff, pyright, pytest) | Phase 1; entry point updated by Phase 6 from `croam.cli:app` to `croam.cli:main`. |
 | `src/croam/__init__.py` | Package marker (empty) | Phase 1. |
-| `src/croam/cli.py` | Full typer app: 7 public verbs (ls, attach, peek, claim, fork, launch, doctor) + hidden emit-state, global callback with --debug/--json/--all/-p/--host/--last/--orphans, no-verb picker dispatch, `main()` CroamError->SystemExit(2) handler | Phase 6 (full rewrite from Phase 1 stub). 64% coverage (stubs account for gap). |
+| `src/croam/cli.py` | Full typer app: 7 public verbs (ls, attach, peek, claim, fork, launch, doctor) + hidden emit-state, global callback with --debug/--json/--all/-p/--host/--last/--orphans, no-verb picker dispatch, `main()` CroamError->SystemExit(2) handler. Phase 7 filled cmd_ls, cmd_attach (+ --no-exec), cmd_peek (+ --here-on-owner, --no-exec). | Phase 6 (structure), Phase 7 (verb bodies). |
 | `src/croam/log.py` | `configure(level, log_file, debug)` for loguru; uses FilterDict-typed filter_map for pyright compat | Phase 1. |
 | `src/croam/errors.py` | `CroamError(Exception)` base + 7 subclasses: ConfigError, SshError, OwnershipConflict, TmuxError, SessionNotFound, OrphanRefused, TimeoutError | Phase 1. |
 | `src/croam/proc.py` | `run(argv, *, timeout, check, capture, env, cwd)` subprocess wrapper with DEBUG logging and TimeoutError translation | Phase 1. |
@@ -49,7 +49,11 @@ The full design lives at `docs/specs/2026-04-30-croam-design.md`. Phase 1 establ
 | `src/croam/shim.py` | Pure decision functions: `should_wrap`, `derive_sid`, `strip_no_tmux`, `find_claude_real`, `is_in_tmux` | Phase 5. 100% coverage. |
 | `src/croam/commands/launch.py` | `LaunchPlan` dataclass, `build_launch_plan` (pure), `launch_cmd` orchestrator with `--no-exec` mode and assertion-before-side-effect contract | Phase 5. 95% coverage. |
 | `src/croam/picker.py` | `PickerRow` dataclass, `format_last_column`, `compute_glyph`, `compute_status_word`, `render_rows`, `format_input_lines`, `build_fzf_argv`, `launch_picker`, `compute_action_intersection` | Phase 6. 91% coverage. |
-| `src/croam/commands/default.py` | `run_picker` orchestrator: discover -> filter -> render -> launch -> stub dispatch | Phase 6. Not directly covered yet (requires config + tty). |
+| `src/croam/commands/default.py` | `run_picker` orchestrator: discover -> filter -> render -> launch -> dispatch. `_dispatch` routes enter->attach, p->peek, ctrl-r->re-run, c/C/f/F->NotImplementedError("Phase 8"), multi-row with action intersection. | Phase 6 (structure), Phase 7 (full dispatch). |
+| `src/croam/transcript.py` | `render_static_transcript(jsonl_path, *, fp=sys.stdout) -> int`; `_extract_text(message_field) -> str` handles string/dict/list-block shapes | Phase 7. 100% coverage. |
+| `src/croam/commands/ls.py` | `run(ctx_obj, config, home) -> int`; JSON/text listing with --all, --host, --last, --orphans, PWD filter | Phase 7. 96% coverage. |
+| `src/croam/commands/peek.py` | `run(sid, ctx_obj, config, home, *, here_on_owner, no_exec) -> int`; local tmux/archived/remote reachable/unreachable mirror dispatch | Phase 7. 90% coverage. |
+| `src/croam/commands/attach.py` | `run(sid, ctx_obj, config, home, *, here_on_owner, no_exec) -> int`; recursion guard, tmux-attach/new-and-attach/ssh-recurse/SshError | Phase 7. 93% coverage. |
 | `src/croam/sync.py` | syncthing mirror access (read-only filesystem); conflict file detection | Created in Phase 9. |
 | `src/croam/doctor.py` | Diagnostics: config + SSH + syncthing + ownership consistency | Created in Phase 9. |
 | `tests/conftest.py` | 5 fixtures (home, tmux_socket, ssh_shim, state_root, e2e_dummy) + `pytest_runtest_call` hookwrapper safety guard | Phase 1. |
@@ -65,8 +69,13 @@ The full design lives at `docs/specs/2026-04-30-croam-design.md`. Phase 1 establ
 | `tests/test_tmux.py` | 13 tests (argv builders + real tmux integration via tmux_socket) | Phase 5. |
 | `tests/test_shim.py` | 24 pure-function tests covering all branches of all five shim functions | Phase 5. |
 | `tests/test_launch.py` | 8 integration tests for build_launch_plan and launch_cmd (uses --no-exec and real tmux) | Phase 5. |
-| `tests/test_cli.py` | 5 tests for CLI surface: help verbs, hidden emit-state, emit-state wiring, debug flag, CroamError handler | Phase 6. |
+| `tests/test_cli.py` | 6 tests for CLI surface: help verbs, hidden emit-state, emit-state wiring, debug flag, CroamError handler, cmd_launch config | Phase 6, updated Phase 7. |
 | `tests/test_picker.py` | 24 tests (10 parametrized format_last_column + 14 others) for picker pure functions and launch_picker subprocess | Phase 6. |
+| `tests/test_transcript.py` | 20 tests for transcript rendering (_extract_text shapes, file errors, message types) | Phase 7. |
+| `tests/test_ls.py` | 10 tests for ls command (empty, JSON, text, PWD filter, --all, --host, orphans, --last) | Phase 7. |
+| `tests/test_peek.py` | 12 tests for peek command (local live/archived, remote reachable/unreachable, mirror, here_on_owner) | Phase 7. |
+| `tests/test_attach.py` | 10 tests for attach command (local running/archived, remote reachable/unreachable, recursion guard, picker fallback) | Phase 7. |
+| `tests/test_default_dispatch.py` | 11 tests for _dispatch routing (enter, p, ctrl-r, c/C/f/F phase 8 stubs, multi-row) | Phase 7. |
 | `tests/fixtures/` | Synthetic session JSONLs, ownership.json snapshots, sample TOML configs | Created across Phase 4, 7. |
 
 ---
@@ -390,6 +399,53 @@ def compute_action_intersection(selected: list[PickerRow], *, self_hostname: str
 def run_picker(*, config: Config, home: Path, ctx_obj: dict) -> int:
     """Orchestrate: discover -> filter -> render -> launch -> dispatch."""
 ```
+
+### Phase 7 (attach, peek, ls, transcript, dispatch) -- FINALIZED
+
+```python
+# src/croam/transcript.py
+def render_static_transcript(jsonl_path: Path, *, fp: TextIO = sys.stdout) -> int:
+    """Render JSONL transcript to fp. Returns 0 on success, 1 if file missing/unreadable.
+    Handles user/assistant message types; skips metadata lines."""
+
+def _extract_text(message_field: str | dict | list) -> str:
+    """Extract text from message field: plain string, dict with string/list content,
+    or list of content blocks. Falls back to json.dumps for unknown shapes."""
+
+# src/croam/commands/ls.py
+def run(ctx_obj: dict, config: Config, home: Path) -> int:
+    """List sessions as JSON or text. Respects ctx_obj flags: json_mode, all_mode,
+    host_filter, last_days, orphans_only. PWD filter applies when none of
+    all_mode/host_filter/orphans_only are set."""
+
+# src/croam/commands/attach.py
+def run(sid: str, ctx_obj: dict, config: Config, home: Path, *,
+        here_on_owner: bool = False, no_exec: bool = False) -> int:
+    """Attach to session. Local: tmux-attach (running) or tmux-new-and-attach (archived).
+    Remote reachable: ssh-recurse with --here-on-owner. Remote unreachable: SshError.
+    --no-exec: print plan as JSON instead of exec'ing. Raises SessionNotFound, SshError."""
+
+# src/croam/commands/peek.py
+def run(sid: str, ctx_obj: dict, config: Config, home: Path, *,
+        here_on_owner: bool = False, no_exec: bool = False) -> int:
+    """Peek at session (read-only). Local live: tmux-peek (read-only attach).
+    Local archived: render_static_transcript. Remote reachable: ssh-recurse.
+    Remote unreachable: mirror JSONL if available, else SshError."""
+
+# src/croam/commands/default.py
+def _dispatch(expect_key: str, selected: list[PickerRow], ctx_obj: dict,
+              config: Config, home: Path) -> int:
+    """Route picker selection to verb. enter->attach, p->peek, ctrl-r->re-run picker,
+    c/C/f/F->NotImplementedError('Phase 8'). Multi-row: iterates with action intersection check."""
+```
+
+Key design notes (Phase 7):
+- `--no-exec` is the test seam: outputs `{"action": "...", "argv": [...]}` JSON, exit 0.
+- `CROAM_NO_EXEC=1` env var also triggers no-exec mode.
+- `CROAM_TMUX_SOCK` env var overrides tmux socket path in attach/peek. Tests set via monkeypatch.
+- `render_static_transcript` must be called with explicit `fp=sys.stdout` at call sites (not relying on default arg) for CliRunner compatibility.
+- Error-exit tests (SessionNotFound, SshError -> exit 2) use subprocess invoking main(), not CliRunner, because CliRunner bypasses main()'s CroamError handler.
+- `_dispatch` signature: `(expect_key, selected, ctx_obj, config, home)`. Phase 8 extends c/C/f/F branches.
 
 Wire-format invariant: `<sid>\t<glyph>\t<status_word>\t<reach_word>\t<cwd_word>\t<host>\t<last>\t<cwd_display>\t<name>\n`.
 fzf uses `--with-nth=2,6,7,8,9` (columns 1,3,4,5 hidden but searchable). `{1}` references sid in preview/binds.
