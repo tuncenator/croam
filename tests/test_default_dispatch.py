@@ -116,40 +116,48 @@ def test_dispatch_ctrl_r_reruns_picker(
 
 
 # ---------------------------------------------------------------------------
-# "c" / "C" -> NotImplementedError Phase 8: claim
+# "c" / "C" -> claim (raises SessionNotFound for unknown sid)
 # ---------------------------------------------------------------------------
 
 
-def test_dispatch_c_raises_not_implemented(home: Path, state_root: Path):
+def test_dispatch_c_claims_session(home: Path, state_root: Path):
+    from croam.errors import SessionNotFound
+
     config = _make_config(home, state_root)
     row = _make_row()
-    with pytest.raises(NotImplementedError, match="Phase 8"):
+    with pytest.raises(SessionNotFound):
         _dispatch("c", [row], {}, config, home)
 
 
-def test_dispatch_C_raises_not_implemented(home: Path, state_root: Path):
+def test_dispatch_C_claims_session_here(home: Path, state_root: Path):
+    from croam.errors import SessionNotFound
+
     config = _make_config(home, state_root)
     row = _make_row()
-    with pytest.raises(NotImplementedError, match="Phase 8"):
+    with pytest.raises(SessionNotFound):
         _dispatch("C", [row], {}, config, home)
 
 
 # ---------------------------------------------------------------------------
-# "f" / "F" -> NotImplementedError Phase 8: fork
+# "f" / "F" -> fork (raises SessionNotFound for missing JSONL)
 # ---------------------------------------------------------------------------
 
 
-def test_dispatch_f_raises_not_implemented(home: Path, state_root: Path):
+def test_dispatch_f_forks_session(home: Path, state_root: Path):
+    from croam.errors import SessionNotFound
+
     config = _make_config(home, state_root)
     row = _make_row()
-    with pytest.raises(NotImplementedError, match="Phase 8"):
+    with pytest.raises(SessionNotFound):
         _dispatch("f", [row], {}, config, home)
 
 
-def test_dispatch_F_raises_not_implemented(home: Path, state_root: Path):
+def test_dispatch_F_forks_session_here(home: Path, state_root: Path):
+    from croam.errors import SessionNotFound
+
     config = _make_config(home, state_root)
     row = _make_row()
-    with pytest.raises(NotImplementedError, match="Phase 8"):
+    with pytest.raises(SessionNotFound):
         _dispatch("F", [row], {}, config, home)
 
 
