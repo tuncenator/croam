@@ -76,9 +76,17 @@ def cmd_attach(
         None
     ),
     here_on_owner: Annotated[bool, typer.Option("--here-on-owner", hidden=True)] = False,
+    no_exec: Annotated[bool, typer.Option("--no-exec", hidden=True)] = False,
 ) -> None:
     """Attach to a session (recursive over SSH if remotely-owned)."""
-    raise NotImplementedError("Phase 7")
+    from croam.commands import attach as attach_mod
+    from croam.config import load_config
+
+    config = load_config()
+    raise typer.Exit(
+        attach_mod.run(sid, ctx.obj, config, Path.home(),
+                       here_on_owner=here_on_owner, no_exec=no_exec)
+    )
 
 
 @app.command("peek")
