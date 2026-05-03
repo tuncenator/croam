@@ -116,7 +116,20 @@ def cmd_claim(
     here: Annotated[bool, typer.Option("--here")] = False,
 ) -> None:
     """Transfer ownership to this host."""
-    raise NotImplementedError("Phase 8")
+    from croam.commands import claim as claim_mod
+    from croam.config import load_config
+
+    config = load_config()
+    raise typer.Exit(
+        claim_mod.run(
+            sid,
+            state_root=config.storage.state_root,
+            hostname=config.self_hostname,
+            home=Path.home(),
+            config_path=Path.home() / ".config" / "croam" / "config.toml",
+            here=here,
+        )
+    )
 
 
 @app.command("fork")
@@ -126,7 +139,40 @@ def cmd_fork(
     here: Annotated[bool, typer.Option("--here")] = False,
 ) -> None:
     """Branch a new session from an existing JSONL."""
-    raise NotImplementedError("Phase 8")
+    from croam.commands import fork as fork_mod
+    from croam.config import load_config
+
+    config = load_config()
+    _fork_sid, rc = fork_mod.run(
+        sid,
+        state_root=config.storage.state_root,
+        hostname=config.self_hostname,
+        home=Path.home(),
+        here=here,
+    )
+    raise typer.Exit(rc)
+
+
+@app.command("release", hidden=True)
+def cmd_release(
+    ctx: typer.Context,
+    sid: Annotated[str, typer.Argument(help="Session UUID.")],
+    emit_jsonl: Annotated[bool, typer.Option("--emit-jsonl", hidden=True)] = False,
+) -> None:
+    """Hidden: release ownership (called by remote claim)."""
+    from croam.commands import release as release_mod
+    from croam.config import load_config
+
+    config = load_config()
+    raise typer.Exit(
+        release_mod.run(
+            sid,
+            state_root=config.storage.state_root,
+            hostname=config.self_hostname,
+            home=Path.home(),
+            emit_jsonl=emit_jsonl,
+        )
+    )
 
 
 @app.command("launch")

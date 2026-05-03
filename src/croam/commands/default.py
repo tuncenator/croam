@@ -48,6 +48,22 @@ def run_picker(*, config: Config, home: Path, ctx_obj: dict) -> int:
     # Phase 4 may not yet have lineage merged; Phase 6 stubs an empty dict.
     lineage: dict = {}  # Phase 9 fills in via lineage.json reads.
 
+    # 1b. Reconcile outclaimed sessions before presenting.
+    from croam.commands import reconcile as reconcile_mod
+
+    reconcile_mod.reconcile_all(
+        state_root=config.storage.state_root,
+        hostname=config.self_hostname,
+        home=home,
+    )
+    # Re-read after reconcile may have changed assertions.
+    assertions_per_host = {
+        config.self_hostname: read_local_assertions(
+            config.storage.state_root, config.self_hostname
+        ),
+    }
+    merged_assertions = merge_assertions(assertions_per_host)
+
     # 2. Apply pre-render filters.
     filtered_sessions = _apply_filters(sessions, merged_assertions, ctx_obj, home)
 
@@ -122,11 +138,38 @@ def _dispatch(
     if expect_key == "ctrl-r":
         return run_picker(config=config, home=home, ctx_obj=ctx_obj)
 
-    # Phase 8 stubs.
+    # Claim and fork dispatch.
     if expect_key in ("c", "C"):
-        raise NotImplementedError("Phase 8: claim")
+        from croam.commands import claim as claim_mod
+
+        here = expect_key == "C"
+        for row in selected:
+            rc = claim_mod.run(
+                row.sid,
+                state_root=config.storage.state_root,
+                hostname=config.self_hostname,
+                home=home,
+                config_path=home / ".config" / "croam" / "config.toml",
+                here=here,
+            )
+            if rc != 0:
+                return rc
+        return 0
     if expect_key in ("f", "F"):
-        raise NotImplementedError("Phase 8: fork")
+        from croam.commands import fork as fork_mod
+
+        here = expect_key == "F"
+        for row in selected:
+            _fork_sid, rc = fork_mod.run(
+                row.sid,
+                state_root=config.storage.state_root,
+                hostname=config.self_hostname,
+                home=home,
+                here=here,
+            )
+            if rc != 0:
+                return rc
+        return 0
 
     if len(selected) == 1:
         sid = selected[0].sid
