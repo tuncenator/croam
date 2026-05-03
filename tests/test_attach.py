@@ -255,3 +255,56 @@ def test_attach_picker_fallback(
     monkeypatch.setattr("croam.commands.default.run_picker", lambda **kw: 42)
     result = runner.invoke(app, ["attach"])
     assert result.exit_code == 42
+
+
+# ---------------------------------------------------------------------------
+# Direct run() tests for coverage of error paths not reachable via --no-exec
+# ---------------------------------------------------------------------------
+
+
+def test_attach_run_sid_not_found_raises(home: Path, state_root: Path):
+    """run() raises SessionNotFound when sid absent from ownership records."""
+    from croam.commands.attach import run
+    from croam.config import load_config
+    from croam.errors import SessionNotFound
+
+    _write_config(home)
+    config = load_config(home / ".config" / "croam" / "config.toml")
+    sid = str(uuid.uuid4())
+
+    with pytest.raises(SessionNotFound):
+        run(sid, {}, config, home, no_exec=True)
+
+
+def test_attach_run_remote_unreachable_raises(home: Path, state_root: Path, ssh_shim):
+    """run() raises SshError when remote owner is unreachable."""
+    from croam.commands.attach import run
+    from croam.config import load_config
+    from croam.errors import SshError
+    from tests._helpers.synth_assertions import build_assertion, write_assertions_file
+
+    cfg_extra = '\n[hosts.vicar]\nssh = "vicar"\n'
+    _write_config(home, extra_hosts=cfg_extra)
+    config = load_config(home / ".config" / "croam" / "config.toml")
+
+    sid = str(uuid.uuid4())
+    assertion = build_assertion(sid, "vicar", datetime.now(UTC), cwd_normalized="~/proj")
+    (state_root / "vicar").mkdir(parents=True, exist_ok=True)
+    write_assertions_file(state_root, "vicar", {sid: assertion})
+
+    ssh_shim.register("vicar", ["true"], exit_code=1)
+
+    with pytest.raises(SshError, match="unreachable"):
+        run(sid, {}, config, home, no_exec=True)
+
+
+def test_attach_peer_alias_fallback(home: Path, state_root: Path):
+    """_peer_alias returns hostname itself when not in config hosts."""
+    from croam.commands.attach import _peer_alias
+    from croam.config import load_config
+
+    _write_config(home)
+    config = load_config(home / ".config" / "croam" / "config.toml")
+
+    # "unknown-host" is not in config.hosts -> falls back to the name itself
+    assert _peer_alias("unknown-host", config) == "unknown-host"

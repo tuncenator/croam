@@ -237,3 +237,60 @@ def test_multiple_records_in_order(tmp_path: Path, home: Path):
     rc = render_static_transcript(p, fp=fp)
     assert rc == 0
     assert fp.getvalue() == "[user] q1\n[assistant] a1\n[user] q2\n"
+
+
+# ---------------------------------------------------------------------------
+# render_static_transcript: OSError on read (permissions)
+# ---------------------------------------------------------------------------
+
+
+def test_unreadable_file_returns_1(tmp_path: Path, home: Path):
+    """File exists but cannot be read (permissions) -> returns 1, writes message."""
+    import stat
+
+    p = tmp_path / "noperm.jsonl"
+    p.write_text('{"type":"user","message":"x"}\n', encoding="utf-8")
+    p.chmod(0)
+    try:
+        fp = io.StringIO()
+        rc = render_static_transcript(p, fp=fp)
+        assert rc == 1
+        assert "transcript not found" in fp.getvalue()
+    finally:
+        p.chmod(stat.S_IRUSR | stat.S_IWUSR)
+
+
+# ---------------------------------------------------------------------------
+# render_static_transcript: blank lines are skipped silently
+# ---------------------------------------------------------------------------
+
+
+def test_blank_lines_skipped(tmp_path: Path, home: Path):
+    """Blank lines between records are skipped silently."""
+    p = tmp_path / "t.jsonl"
+    p.write_text(
+        '{"type":"user","message":"hi"}\n\n\n{"type":"user","message":"bye"}\n',
+        encoding="utf-8",
+    )
+    fp = io.StringIO()
+    rc = render_static_transcript(p, fp=fp)
+    assert rc == 0
+    assert fp.getvalue() == "[user] hi\n[user] bye\n"
+
+
+# ---------------------------------------------------------------------------
+# render_static_transcript: non-dict JSON line is skipped
+# ---------------------------------------------------------------------------
+
+
+def test_non_dict_json_line_skipped(tmp_path: Path, home: Path):
+    """A valid JSON line that is not a dict (e.g. an array) is silently skipped."""
+    p = tmp_path / "t.jsonl"
+    p.write_text(
+        '["not","a","dict"]\n{"type":"user","message":"real"}\n',
+        encoding="utf-8",
+    )
+    fp = io.StringIO()
+    rc = render_static_transcript(p, fp=fp)
+    assert rc == 0
+    assert fp.getvalue() == "[user] real\n"

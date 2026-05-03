@@ -103,9 +103,7 @@ def run(
         argv_repr = ["render_static_transcript", str(transcript_path)]
         logger.info("peek: static-transcript path={}", transcript_path)
         if resolved_no_exec:
-            sys.stdout.write(
-                json.dumps({"action": "static-transcript", "argv": argv_repr}) + "\n"
-            )
+            sys.stdout.write(json.dumps({"action": "static-transcript", "argv": argv_repr}) + "\n")
             return 0
         from croam.transcript import render_static_transcript
 
@@ -130,13 +128,13 @@ def run(
     mirror_path: Path | None = None
     if assertion is not None:
         host_entry = config.hosts.get(owner)
-        owner_home: Path = host_entry.home if (host_entry is not None and host_entry.home is not None) else home
+        owner_home: Path = (
+            host_entry.home if (host_entry is not None and host_entry.home is not None) else home
+        )
         try:
             cwd_abs = denormalize_cwd(assertion.cwd_normalized, owner_home)
             encoded = encode_cwd(cwd_abs)
-            mirror_path = (
-                config.storage.state_root / owner / "projects" / encoded / f"{sid}.jsonl"
-            )
+            mirror_path = config.storage.state_root / owner / "projects" / encoded / f"{sid}.jsonl"
         except (ValueError, KeyError, Exception) as e:
             logger.warning("peek: could not resolve mirror path for owner={}: {}", owner, e)
 
@@ -153,6 +151,5 @@ def run(
         return render_static_transcript(mirror_path, fp=sys.stdout)
 
     raise SshError(
-        f"origin {owner} unreachable and no mirror found for session {sid!r}; "
-        "no mirror available"
+        f"origin {owner} unreachable and no mirror found for session {sid!r}; no mirror available"
     )

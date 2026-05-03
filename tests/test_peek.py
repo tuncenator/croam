@@ -266,3 +266,138 @@ def test_peek_sid_not_found(home: Path, state_root: Path):
     )
     assert proc.returncode == 2
     assert "not found" in proc.stderr.lower()
+
+
+# ---------------------------------------------------------------------------
+# Direct run() tests for coverage of branches not reachable via --no-exec
+# ---------------------------------------------------------------------------
+
+
+def test_peek_run_sid_not_found_raises(home: Path, state_root: Path):
+    """run() raises SessionNotFound when sid absent."""
+    from croam.commands.peek import run
+    from croam.config import load_config
+    from croam.errors import SessionNotFound
+
+    _write_config(home)
+    config = load_config(home / ".config" / "croam" / "config.toml")
+    sid = str(uuid.uuid4())
+
+    with pytest.raises(SessionNotFound):
+        run(sid, {}, config, home, no_exec=True)
+
+
+def test_peek_run_here_on_owner_uses_local_owner(
+    home: Path, state_root: Path, tmux_socket: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """here_on_owner=True -> owner is self_hostname regardless of merged ownership."""
+    from croam.commands.peek import run
+    from croam.config import load_config
+
+    cfg_extra = '\n[hosts.vicar]\nssh = "vicar"\n'
+    _write_config(home, extra_hosts=cfg_extra)
+    config = load_config(home / ".config" / "croam" / "config.toml")
+
+    cwd = home / "proj"
+    cwd.mkdir(parents=True)
+    sid = _seed_local_session(home, state_root, cwd)
+
+    monkeypatch.setenv("CROAM_TMUX_SOCK", str(tmux_socket))
+
+    # here_on_owner=True with no tmux -> static-transcript (local path)
+    import io
+
+    buf = io.StringIO()
+    import sys
+
+    old = sys.stdout
+    sys.stdout = buf
+    try:
+        rc = run(sid, {}, config, home, here_on_owner=True, no_exec=True)
+    finally:
+        sys.stdout = old
+    assert rc == 0
+    import json
+
+    plan = json.loads(buf.getvalue())
+    assert plan["action"] == "static-transcript"
+
+
+def test_peek_peer_alias_fallback(home: Path, state_root: Path):
+    """_peer_alias returns owner name itself when not in config hosts."""
+    from croam.commands.peek import _peer_alias
+    from croam.config import load_config
+
+    _write_config(home)
+    config = load_config(home / ".config" / "croam" / "config.toml")
+    assert _peer_alias("unknown-host", config) == "unknown-host"
+
+
+def test_peek_run_remote_unreachable_raises_no_mirror(home: Path, state_root: Path, ssh_shim):
+    """run() raises SshError when remote unreachable and no mirror."""
+    from croam.commands.peek import run
+    from croam.config import load_config
+    from croam.errors import SshError
+    from tests._helpers.synth_assertions import build_assertion, write_assertions_file
+
+    cfg_extra = '\n[hosts.vicar]\nssh = "vicar"\nhome = "/tmp/vicar-home"\n'
+    _write_config(home, extra_hosts=cfg_extra)
+    config = load_config(home / ".config" / "croam" / "config.toml")
+
+    sid = str(uuid.uuid4())
+    (state_root / "vicar").mkdir(parents=True, exist_ok=True)
+    write_assertions_file(
+        state_root,
+        "vicar",
+        {sid: build_assertion(sid, "vicar", datetime.now(UTC), cwd_normalized="~/proj")},
+    )
+
+    ssh_shim.register("vicar", ["true"], exit_code=1)
+
+    with pytest.raises(SshError, match="unreachable"):
+        run(sid, {}, config, home, no_exec=True)
+
+
+def test_peek_run_mirror_renders_transcript(home: Path, state_root: Path, ssh_shim):
+    """Unreachable remote with mirror: no_exec=False renders the mirror transcript."""
+    import io
+    import sys
+
+    from croam.commands.peek import run
+    from croam.config import load_config
+    from croam.paths import encode_cwd
+    from tests._helpers.synth_assertions import build_assertion, write_assertions_file
+
+    cfg_extra = '\n[hosts.vicar]\nssh = "vicar"\nhome = "/tmp/vicar-home"\n'
+    _write_config(home, extra_hosts=cfg_extra)
+    config = load_config(home / ".config" / "croam" / "config.toml")
+
+    sid = str(uuid.uuid4())
+    cwd_normalized = "~/proj"
+    (state_root / "vicar").mkdir(parents=True, exist_ok=True)
+    write_assertions_file(
+        state_root,
+        "vicar",
+        {sid: build_assertion(sid, "vicar", datetime.now(UTC), cwd_normalized=cwd_normalized)},
+    )
+
+    ssh_shim.register("vicar", ["true"], exit_code=1)
+
+    vicar_home = Path("/tmp/vicar-home")
+    cwd_abs = vicar_home / "proj"
+    encoded = encode_cwd(cwd_abs)
+    mirror_dir = state_root / "vicar" / "projects" / encoded
+    mirror_dir.mkdir(parents=True, exist_ok=True)
+    mirror_jsonl = mirror_dir / f"{sid}.jsonl"
+    mirror_jsonl.write_text('{"type":"user","message":"from mirror"}\n', encoding="utf-8")
+
+    buf = io.StringIO()
+    old = sys.stdout
+    sys.stdout = buf
+    try:
+        rc = run(sid, {}, config, home, no_exec=False)
+    finally:
+        sys.stdout = old
+
+    assert rc == 0
+    assert "[user] from mirror" in buf.getvalue()
