@@ -62,7 +62,11 @@ def _global(
 @app.command("ls")
 def cmd_ls(ctx: typer.Context) -> None:
     """List sessions (use --json for scriptable output)."""
-    raise NotImplementedError("Phase 7")
+    from croam.commands import ls as ls_mod
+    from croam.config import load_config
+
+    config = load_config()
+    raise typer.Exit(ls_mod.run(ctx.obj, config, Path.home()))
 
 
 @app.command("attach")
