@@ -63,6 +63,39 @@ class TestWriteSnapshot:
         assert result == {"sid-z": 3}
 
 
+class TestReadSnapshotsEdgeCases:
+    def test_reads_bare_int_format(self, state_root: Path) -> None:
+        """Backward compat: accepts {sid: int} format."""
+        import json
+
+        d = state_root / "stormtree"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "snapshots.json").write_text(json.dumps({"sid-old": 99}))
+        result = read_snapshots(state_root, "stormtree")
+        assert result == {"sid-old": 99}
+
+    def test_ignores_malformed_entry(self, state_root: Path) -> None:
+        """Malformed entry (non-dict, non-int) is skipped with warning."""
+        import json
+
+        d = state_root / "stormtree"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "snapshots.json").write_text(json.dumps({"good": {"line_count": 5}, "bad": "string"}))
+        result = read_snapshots(state_root, "stormtree")
+        assert result == {"good": 5}
+
+
+class TestWriteSnapshotCorrupt:
+    def test_write_over_corrupt_file(self, state_root: Path) -> None:
+        """write_snapshot on corrupt existing file resets to just the new entry."""
+        d = state_root / "stormtree"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "snapshots.json").write_text("{bad json")
+        write_snapshot(state_root, "stormtree", "new-sid", 10)
+        result = read_snapshots(state_root, "stormtree")
+        assert result == {"new-sid": 10}
+
+
 class TestGetSnapshotLineCount:
     def test_returns_none_when_no_snapshot(self, state_root: Path) -> None:
         assert get_snapshot_line_count(state_root, "stormtree", "sid-nope") is None

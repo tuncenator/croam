@@ -72,7 +72,6 @@ class TestReconcileAutoDiscard:
     ) -> None:
         """If JSONL line count matches snapshot, auto-discard (no prompt)."""
         from croam.commands.reconcile import reconcile_one
-
         from croam.ownership import read_local_assertions
         from croam.snapshots import write_snapshot
 
@@ -146,7 +145,6 @@ class TestReconcilePromptFork:
     ) -> None:
         """If user chooses discard, session is discarded."""
         from croam.commands.reconcile import reconcile_one
-
         from croam.ownership import read_local_assertions
 
         sid = str(uuid.uuid4())
@@ -207,3 +205,78 @@ class TestReconcileNoSnapshot:
             sid, state_root=state_root, hostname="stormtree", home=home
         )
         assert action == "fork"
+
+
+class TestReconcileAll:
+    """Test reconcile_all orchestration."""
+
+    def test_reconcile_all_empty(
+        self, home: Path, state_root: Path, _config_file: Path
+    ) -> None:
+        """No outclaimed sessions returns empty list."""
+        from croam.commands.reconcile import reconcile_all
+
+        result = reconcile_all(state_root=state_root, hostname="stormtree", home=home)
+        assert result == []
+
+    def test_reconcile_all_processes_multiple(
+        self, home: Path, state_root: Path, _config_file: Path
+    ) -> None:
+        """Multiple outclaimed sessions are all processed (auto-discard)."""
+        from croam.commands.reconcile import reconcile_all
+        from croam.snapshots import write_snapshot
+
+        sids = []
+        for i in range(3):
+            sid = str(uuid.uuid4())
+            sids.append(sid)
+            cwd = home / "projects" / f"multi{i}"
+            cwd.mkdir(parents=True)
+            build_jsonl(home, sid, cwd, n_user=2)  # 4 lines
+            write_snapshot(state_root, "stormtree", sid, 4)
+
+        # Write our assertions
+        our_assertions = {
+            sid: build_assertion(sid, "stormtree", datetime.now(UTC))
+            for sid in sids
+        }
+        write_assertions_file(state_root, "stormtree", our_assertions)
+
+        # Vicar claims all of them
+        t2 = datetime.now(UTC) + timedelta(seconds=1)
+        their_assertions = {
+            sid: build_assertion(sid, "vicar", t2, action="claim", previous_owner="stormtree")
+            for sid in sids
+        }
+        write_assertions_file(state_root, "vicar", their_assertions)
+
+        result = reconcile_all(state_root=state_root, hostname="stormtree", home=home)
+        assert len(result) == 3
+        for _sid, action in result:
+            assert action == "discard"
+
+
+class TestReconcileNoJsonl:
+    """Reconcile with no JSONL auto-discards."""
+
+    def test_no_jsonl_auto_discards(
+        self, home: Path, state_root: Path, _config_file: Path
+    ) -> None:
+        """If JSONL doesn't exist, auto-discard without prompting."""
+        from croam.commands.reconcile import reconcile_one
+
+        sid = str(uuid.uuid4())
+        # No JSONL, just assertions
+        assertion = build_assertion(sid, "stormtree", datetime.now(UTC))
+        write_assertions_file(state_root, "stormtree", {sid: assertion})
+
+        t2 = datetime.now(UTC) + timedelta(seconds=1)
+        their = build_assertion(
+            sid, "vicar", t2, action="claim", previous_owner="stormtree"
+        )
+        write_assertions_file(state_root, "vicar", {sid: their})
+
+        action = reconcile_one(
+            sid, state_root=state_root, hostname="stormtree", home=home
+        )
+        assert action == "discard"
