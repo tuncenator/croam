@@ -85,9 +85,18 @@ def cmd_attach(
 def cmd_peek(
     ctx: typer.Context,
     sid: Annotated[str, typer.Argument(help="Session UUID.")],
+    here_on_owner: Annotated[bool, typer.Option("--here-on-owner", hidden=True)] = False,
+    no_exec: Annotated[bool, typer.Option("--no-exec", hidden=True)] = False,
 ) -> None:
     """Read-only view of a session."""
-    raise NotImplementedError("Phase 7")
+    from croam.commands import peek as peek_mod
+    from croam.config import load_config
+
+    config = load_config()
+    raise typer.Exit(
+        peek_mod.run(sid, ctx.obj, config, Path.home(),
+                     here_on_owner=here_on_owner, no_exec=no_exec)
+    )
 
 
 @app.command("claim")
