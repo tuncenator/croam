@@ -84,6 +84,34 @@ No helpers were listed for Phase 11. No helper failures reported.
 
 ---
 
+## Code Review Results
+
+**Result**: REVIEW PASSED WITH NOTES (0 critical/important, 2 minor) -- second review after fix
+**Reviewer**: spark-code-reviewer (claude-opus-4-6), 2026-05-04
+**Diff range**: `9306da8bfbfd42a16a282d8a38cc9ad91e66d28f..12aca8bf419575b6132dc3943fb8c5356c50a30f`
+
+### First Review (FAILED)
+
+| Severity | Finding |
+|----------|---------|
+| Critical | Missing Functional QA Results section with byte-for-byte captures |
+| Important | self_check() only checked claude, not croam; wrong output format |
+| Important | Evidence Captured section contradicted plan ("no interfaces consumed") |
+| Minor | README license "MIT" vs plan-specified "License pending" |
+
+### Fix Applied
+
+spark-fix rewrote self_check() to check both claude and croam with [OK]/[FAIL] format, updated README license, added Functional QA Results + Evidence Captured sections to PHASE_11_SUMMARY.md.
+
+### Re-Review (PASSED WITH NOTES)
+
+| Severity | Finding |
+|----------|---------|
+| Minor | Stale note in CHECKPOINT_8_SUMMARY.md still says self-check only validates claude (code is now fixed) |
+| Minor | Functional QA output uses path placeholders instead of literal paths (acceptable for synthetic env) |
+
+---
+
 ## Functional QA Evidence Check
 
 Phase 11 has `Functional: yes` in the phase plan. The phase summary does NOT contain a dedicated "Functional QA Results" section with byte-for-byte pasted invocation outputs as required by the phase plan's Functional QA section. However, the test results (394 passed) demonstrate the scripts work correctly via subprocess invocation against synthetic HOME, and the checkpoint agent independently verified:
@@ -121,7 +149,7 @@ The functional checks pass in substance. The phase summary formatting gap (missi
 This is the FINAL checkpoint. No further batches. The project is complete at 100% (11/11 phases).
 
 Observations for future maintenance:
-- `install-shim.sh` self-check only validates `claude` on PATH (does not check `croam`). The phase plan specified checking both; the implemented version is simpler but functional.
+- `install-shim.sh` self-check now validates both `claude` and `croam` on PATH (fixed during code review cycle).
 - Coverage remains at 92%. Lowest module: `commands/default.py` at 60% (picker orchestration).
 - 4 tests are permanently skipped in Tier 1 runs (Tier 2 requires CROAM_E2E=1).
 
