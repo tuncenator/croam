@@ -3,7 +3,7 @@
 > **Living document** -- each phase updates this with new discoveries and changes.
 > Read this before exploring the codebase. It may already have what you need.
 >
-> Last updated by: Checkpoint 1 - Phase 1 Glyphs and Colors (2026-05-04)
+> Last updated by: Checkpoint 2 - Phase 2 Display Formatting (2026-05-04)
 
 ---
 
@@ -38,6 +38,7 @@ Key layers:
 | `tests/_helpers/fake_fzf.py` | Fake fzf binary for picker tests | `make_fake_fzf()` creates a script that outputs canned data |
 | `tests/_helpers/synth_jsonl.py` | Synthetic JSONL transcript builder | `build_jsonl()` creates test transcripts |
 | `tests/_helpers/synth_session.py` | Synthetic session metadata builder | Session JSON file creation |
+| `tests/test_display_formatting.py` | Tests for fish_truncate_path, extract_first_user_message, render_rows integration | 22 tests covering Phase 2 display formatting |
 | `tests/test_picker.py` | Picker unit/integration tests | 15+ tests covering formatters, rows, fzf argv, launch |
 
 ---
@@ -92,8 +93,10 @@ class PickerRow:
 - `compute_glyph(host_status: HostStatus | None) -> str`: Returns Unicode circle glyphs: `"●"` reachable, `"○"` unreachable, `"?"` unknown
 - `colorize_glyph(glyph: str, status_word: str) -> str`: Wraps glyph in ANSI escape codes based on status_word (green/yellow/gray/dim); unknown status returns glyph unchanged
 - `compute_status_word(session, host_status) -> str`: Returns status category string
+- `fish_truncate_path(path: str, home: str) -> str`: Fish-shell style path truncation (abbreviates intermediate components to first char, replaces home prefix with `~`)
+- `extract_first_user_message(jsonl_path: Path, max_chars: int = 80) -> str | None`: Returns first non-empty user message from JSONL transcript, truncated to max_chars with `...` suffix; returns None on missing files or no user messages. Uses `_extract_text()` from transcript.py via local import.
 - `format_last_column(updated_at_ms: int | None, now: datetime) -> str`: Relative time formatting
-- `render_rows(sessions, assertions, host_statuses, pwd, lineage, ...) -> list[PickerRow]`: Main row builder
+- `render_rows(sessions, assertions, host_statuses, pwd, lineage, ...) -> list[PickerRow]`: Main row builder. Applies `fish_truncate_path()` to `cwd_display`. For unnamed sessions, falls back to first user message then `sid[:8]`.
 - `format_input_lines(rows: list[PickerRow]) -> str`: Tab-joined fzf stdin wire format
 - `build_fzf_argv(filter_pwd, *, keyfile) -> list[str]`: Constructs fzf argv with two-mode bindings
 - `launch_picker(rows, filter_pwd, ...) -> tuple[str, list[PickerRow]]`: Runs fzf subprocess
