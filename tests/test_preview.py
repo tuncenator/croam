@@ -247,3 +247,19 @@ def test_render_preview_archived_session(home):
 
     output = render_preview(sid, home)
     assert "archived" in output.lower()
+
+
+# ---------------------------------------------------------------------------
+# build_fzf_argv integration: preview wiring
+# ---------------------------------------------------------------------------
+
+
+def test_build_fzf_argv_uses_croam_preview(home, tmp_path):
+    """build_fzf_argv wires --preview to 'croam preview {1}'."""
+    from croam.picker import build_fzf_argv
+
+    keyfile = str(tmp_path / "keyfile")
+    argv = build_fzf_argv(filter_pwd=None, keyfile=keyfile)
+    preview_args = [a for a in argv if a.startswith("--preview=")]
+    assert len(preview_args) == 1
+    assert preview_args[0] == "--preview=croam preview {1}"

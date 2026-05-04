@@ -381,7 +381,7 @@ def build_fzf_argv(
         f"--header={filter_hdr}",
         "--height=80%",
         "--layout=reverse",
-        "--preview=printf 'sid: {1}\\n(preview pane to be filled in v2)\\n'",
+        "--preview=croam preview {1}",
         "--preview-window=right:50%:wrap",
         # Tab for multi-select works in both modes.
         "--bind=tab:toggle+down",

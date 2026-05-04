@@ -221,6 +221,21 @@ def cmd_emit_state(ctx: typer.Context) -> None:
     )
 
 
+@app.command("preview", hidden=True)
+def cmd_preview(
+    ctx: typer.Context,
+    sid: Annotated[str, typer.Argument(help="Session UUID.")],
+) -> None:
+    """Render preview pane for a session (called by fzf --preview)."""
+    from croam.preview import render_preview
+
+    try:
+        output = render_preview(sid, Path.home())
+    except Exception:
+        output = f"sid: {sid}\n(preview unavailable)"
+    typer.echo(output)
+
+
 def main() -> None:
     """Entry point for `[project.scripts] croam = "croam.cli:main"`."""
     try:
