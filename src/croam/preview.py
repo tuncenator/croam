@@ -2,7 +2,7 @@
 
 Produces a metadata block (owner, status, cwd, actions) and a conversation
 tail (last N messages) for a given session id. Invoked by fzf via
-`croam preview {1}` on every cursor movement, so speed matters.
+``croam preview {1}`` on every cursor movement, so speed matters.
 """
 
 from __future__ import annotations
@@ -14,10 +14,6 @@ from loguru import logger
 
 from croam.transcript import _extract_text
 
-# ---------------------------------------------------------------------------
-# Conversation tail extraction
-# ---------------------------------------------------------------------------
-
 _TAIL_TYPES = {"user", "assistant"}
 
 
@@ -26,18 +22,29 @@ def extract_conversation_tail(
     n: int = 10,
     max_msg_chars: int = 200,
 ) -> list[tuple[str, str]]:
-    """Return the last *n* user/assistant messages from a JSONL transcript.
-
-    Each entry is a (role, text) tuple. Messages longer than *max_msg_chars*
-    are truncated with a "..." suffix. Returns an empty list on missing or
-    unreadable files.
-    """
+    """Return the last *n* user/assistant messages from a JSONL transcript."""
     try:
         raw = jsonl_path.read_text(encoding="utf-8")
     except OSError as exc:
         logger.debug("extract_conversation_tail: cannot read {}: {}", jsonl_path, exc)
         return []
+    return _parse_tail(raw, n, max_msg_chars)
 
+
+def _extract_tail_from_text(
+    raw: str,
+    n: int = 10,
+    max_msg_chars: int = 200,
+) -> list[tuple[str, str]]:
+    """Parse conversation tail from raw JSONL text (local or SSH-fetched)."""
+    return _parse_tail(raw, n, max_msg_chars)
+
+
+def _parse_tail(
+    raw: str,
+    n: int,
+    max_msg_chars: int,
+) -> list[tuple[str, str]]:
     messages: list[tuple[str, str]] = []
     for line in raw.splitlines():
         line = line.strip()
@@ -56,7 +63,6 @@ def extract_conversation_tail(
         if len(text) > max_msg_chars:
             text = text[:max_msg_chars] + "..."
         messages.append((msg_type, text))
-
     return messages[-n:]
 
 
@@ -80,11 +86,7 @@ def _find_transcript(sid: str, home: Path) -> Path | None:
 
 
 def _find_session_metadata(sid: str, home: Path) -> dict | None:
-    """Find session metadata for *sid* in ~/.claude/sessions/*.json.
-
-    Returns the parsed JSON dict or None. If multiple files reference
-    the same sid, keeps the one with the highest updatedAt.
-    """
+    """Find session metadata for *sid* in ~/.claude/sessions/*.json."""
     sessions_dir = home / ".claude" / "sessions"
     if not sessions_dir.exists():
         return None
@@ -101,15 +103,13 @@ def _find_session_metadata(sid: str, home: Path) -> dict | None:
     return best
 
 
-def _find_owner(sid: str, home: Path) -> str:
-    """Look up the owner hostname for *sid* from the assertions store.
+def _find_assertion(sid: str, state_root: Path) -> tuple[str, str] | None:
+    """Look up owner and cwd_normalized for *sid* from the assertions store.
 
-    Scans ~/.local/share/croam/*/ownership.json. Returns the owner string
-    or "unknown" if no assertion is found.
+    Returns (owner, cwd_normalized) or None.
     """
-    state_root = home / ".local" / "share" / "croam"
     if not state_root.exists():
-        return "unknown"
+        return None
     for host_dir in state_root.iterdir():
         if not host_dir.is_dir():
             continue
@@ -124,15 +124,46 @@ def _find_owner(sid: str, home: Path) -> str:
             continue
         entry = data.get(sid)
         if isinstance(entry, dict) and "owner" in entry:
-            return entry["owner"]
-    return "unknown"
+            cwd = entry.get("cwd_normalized", "")
+            return entry["owner"], cwd
+    return None
+
+
+def _read_remote_transcript(
+    sid: str,
+    ssh_alias: str,
+    timeout_s: float = 3.0,
+) -> str | None:
+    """SSH to a remote host and cat the transcript for *sid*.
+
+    Returns raw JSONL text or None on failure.
+    """
+    from croam import proc
+    from croam.errors import TimeoutError as CroamTimeoutError
+
+    cmd = f'f=$(find ~/.claude/projects -name "{sid}.jsonl" -print -quit 2>/dev/null) && [ -n "$f" ] && cat "$f"'
+    argv = [
+        "ssh",
+        "-o", "ConnectTimeout=2",
+        "-o", "BatchMode=yes",
+        "-o", "StrictHostKeyChecking=no",
+        ssh_alias,
+        "bash", "-c", cmd,
+    ]
+    try:
+        result = proc.run(argv, timeout=timeout_s)
+    except CroamTimeoutError:
+        logger.debug("_read_remote_transcript: SSH timeout for sid={} host={}", sid, ssh_alias)
+        return None
+    if result.returncode != 0:
+        logger.debug("_read_remote_transcript: SSH failed for sid={} host={}", sid, ssh_alias)
+        return None
+    if not result.stdout.strip():
+        return None
+    return result.stdout
 
 
 def _derive_status(meta: dict | None) -> str:
-    """Derive the status word from session metadata.
-
-    Returns one of: running-idle, running-busy, archived.
-    """
     if meta is None or meta.get("pid") is None:
         return "archived"
     raw = meta.get("status")
@@ -142,7 +173,6 @@ def _derive_status(meta: dict | None) -> str:
 
 
 def _derive_actions(status: str, cwd_exists: bool) -> list[str]:
-    """List available actions based on status and cwd presence."""
     actions = ["peek"]
     if status.startswith("running"):
         actions.append("attach")
@@ -154,6 +184,16 @@ def _derive_actions(status: str, cwd_exists: bool) -> list[str]:
     return actions
 
 
+def _format_tail(tail: list[tuple[str, str]]) -> list[str]:
+    """Format conversation tail tuples into display lines."""
+    if not tail:
+        return ["", "(no messages)"]
+    lines = ["", f"--- last {len(tail)} messages ---", ""]
+    for role, text in tail:
+        lines.append(f"[{role}] {text}")
+    return lines
+
+
 # ---------------------------------------------------------------------------
 # Preview renderer
 # ---------------------------------------------------------------------------
@@ -162,22 +202,76 @@ def _derive_actions(status: str, cwd_exists: bool) -> list[str]:
 def render_preview(sid: str, home: Path) -> str:
     """Build the full preview pane text for a session.
 
-    Returns a formatted string with a metadata block and conversation tail.
-    Never raises; returns a fallback message on any error.
+    Handles both local sessions (transcript in ~/.claude/projects/) and
+    remote sessions (transcript fetched via SSH from the owning host).
     """
-    # Import fish_truncate_path here to avoid circular import at module level.
+    from croam.config import load_config
     from croam.picker import fish_truncate_path
 
+    try:
+        config = load_config()
+    except Exception:
+        config = None
+
+    state_root = config.storage.state_root if config else home / ".local" / "share" / "croam"
+
+    # Try local transcript first.
     transcript_path = _find_transcript(sid, home)
-    if transcript_path is None:
-        return f"sid: {sid}\n(preview unavailable: session not found)"
 
+    if transcript_path is not None:
+        return _render_local(sid, home, state_root, transcript_path, config)
+
+    # No local transcript. Check assertions for remote session info.
+    assertion = _find_assertion(sid, state_root)
+    if assertion is None:
+        return f"sid: {sid}\n(session not found)"
+
+    owner, cwd_normalized = assertion
+    cwd_display = fish_truncate_path(
+        cwd_normalized.replace("~", str(home), 1) if cwd_normalized.startswith("~") else cwd_normalized,
+        str(home),
+    )
     meta = _find_session_metadata(sid, home)
-    owner = _find_owner(sid, home)
     status = _derive_status(meta)
+    cwd_raw = cwd_normalized.replace("~", str(home), 1) if cwd_normalized.startswith("~") else cwd_normalized
+    cwd_exists = Path(cwd_raw).is_dir()
+    actions = _derive_actions(status, cwd_exists)
 
-    # Derive cwd from transcript location: parent dir name is the encoded cwd.
+    lines = [
+        f"Owner:   {owner}",
+        f"Status:  {status}",
+        f"CWD:     {cwd_display}",
+        f"Actions: {', '.join(actions)}",
+    ]
+
+    # Try fetching transcript from remote host.
+    ssh_alias = _resolve_ssh_alias(owner, config)
+    if ssh_alias is not None:
+        raw = _read_remote_transcript(sid, ssh_alias)
+        if raw is not None:
+            tail = _extract_tail_from_text(raw)
+            lines.extend(_format_tail(tail))
+            return "\n".join(lines)
+
+    lines.append("")
+    lines.append(f"(transcript on {owner}, not reachable)")
+    return "\n".join(lines)
+
+
+def _render_local(
+    sid: str,
+    home: Path,
+    state_root: Path,
+    transcript_path: Path,
+    config: object | None,
+) -> str:
     from croam.paths import decode_cwd
+    from croam.picker import fish_truncate_path
+
+    assertion = _find_assertion(sid, state_root)
+    owner = assertion[0] if assertion else "local"
+    meta = _find_session_metadata(sid, home)
+    status = _derive_status(meta)
 
     try:
         cwd_raw = str(decode_cwd(transcript_path.parent.name, host_home=home))
@@ -188,7 +282,6 @@ def render_preview(sid: str, home: Path) -> str:
     cwd_exists = Path(cwd_raw).is_dir()
     actions = _derive_actions(status, cwd_exists)
 
-    # Metadata block.
     lines = [
         f"Owner:   {owner}",
         f"Status:  {status}",
@@ -196,16 +289,19 @@ def render_preview(sid: str, home: Path) -> str:
         f"Actions: {', '.join(actions)}",
     ]
 
-    # Conversation tail.
     tail = extract_conversation_tail(transcript_path)
-    if tail:
-        lines.append("")
-        lines.append(f"--- last {len(tail)} messages ---")
-        lines.append("")
-        for role, text in tail:
-            lines.append(f"[{role}] {text}")
-    else:
-        lines.append("")
-        lines.append("(no messages)")
-
+    lines.extend(_format_tail(tail))
     return "\n".join(lines)
+
+
+def _resolve_ssh_alias(hostname: str, config: object | None) -> str | None:
+    """Get the SSH alias for a hostname from config. Returns None if unknown."""
+    if config is None:
+        return None
+    from croam.config import Config
+    if not isinstance(config, Config):
+        return None
+    entry = config.hosts.get(hostname)
+    if entry is None:
+        return None
+    return entry.ssh
