@@ -50,7 +50,7 @@
 ### Conductor
 
 - **Total Batches**: 8
-- **Current Batch**: 7
+- **Current Batch**: 8
 - **Pacing**: auto-refresh
 - **Batches Per Session**: 4
 - **Execution Plan**: docs/agent/project-start/EXECUTION_PLAN.md
@@ -58,16 +58,16 @@
 ---
 
 **Last Updated:** 2026-05-04
-**Current Phase:** 10 of 11
-**Phase Name:** Integration tests round 1
-**Progress:** 82% (9/11 phases complete)
+**Current Phase:** 11 of 11
+**Phase Name:** Polish, install, README
+**Progress:** 91% (10/11 phases complete)
 
 ---
 
 ## Progress Bar
 
 ```
-[################----] 82% (9/11)
+[##################--] 91% (10/11)
 ```
 
 ---
@@ -85,14 +85,14 @@
 | 7 | Verbs: attach, peek, ls | `[Complete]` |
 | 8 | Verbs: claim, fork (incl. ssh-strict, --here) | `[Complete]` |
 | 9 | Sync mode & doctor | `[Complete]` |
-| 10 | Integration tests round 1 | `[Current]` |
-| 11 | Polish, install, README | `[Pending]` |
+| 10 | Integration tests round 1 | `[Complete]` |
+| 11 | Polish, install, README | `[Current]` |
 
 ---
 
 ## Instructions for Agents
 
-Batch 7 runs Phase 10 sequentially. The agent should:
+Batch 8 runs Phase 11 sequentially (final batch). The agent should:
 
 1. Read its assigned phase plan from `phase_plans/PHASE_10.md`
 2. Read the 2 most recent phase summaries (`summaries/PHASE_08_SUMMARY.md`, `summaries/CHECKPOINT_6_SUMMARY.md`)
