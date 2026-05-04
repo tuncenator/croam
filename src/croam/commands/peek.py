@@ -116,7 +116,7 @@ def run(
 
     if reachable:
         peer_alias = _peer_alias(owner, config)
-        argv = ["ssh", peer_alias, "croam", "peek", sid, "--here-on-owner"]
+        argv = ["ssh", "-t", peer_alias, f"bash -lc 'croam peek {sid} --here-on-owner'"]
         logger.info("peek: ssh-recurse argv={}", argv)
         if resolved_no_exec:
             sys.stdout.write(json.dumps({"action": "ssh-recurse", "argv": argv}) + "\n")

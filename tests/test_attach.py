@@ -155,8 +155,9 @@ def test_attach_remote_reachable(
     plan = json.loads(result.output)
     assert plan["action"] == "ssh-recurse"
     assert "vicar" in plan["argv"]
-    assert "attach" in plan["argv"]
-    assert "--here-on-owner" in plan["argv"]
+    argv_str = " ".join(plan["argv"])
+    assert "croam attach" in argv_str
+    assert "--here-on-owner" in argv_str
 
 
 # ---------------------------------------------------------------------------

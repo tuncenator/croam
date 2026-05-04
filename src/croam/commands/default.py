@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -14,7 +13,7 @@ from loguru import logger
 from croam import picker as picker_mod
 from croam.config import Config
 from croam.hosts import HostStatus, probe_reachability
-from croam.ownership import merge_assertions, read_local_assertions
+from croam.ownership import Assertion, merge_assertions, read_all_assertions
 from croam.sessions import ClaudeSession, discover_local_sessions
 
 
@@ -25,25 +24,10 @@ def run_picker(*, config: Config, home: Path, ctx_obj: dict) -> int:
     """
     # 1. Discover.
     sessions = discover_local_sessions(home)
-    assertions_per_host = {
-        config.self_hostname: read_local_assertions(
-            config.storage.state_root, config.self_hostname
-        ),
-        # Peers added by Phase 9 / hybrid mode. Phase 6 reads only local for the picker.
-    }
+    assertions_per_host = read_all_assertions(config.storage.state_root)
     merged_assertions = merge_assertions(assertions_per_host)
 
-    host_statuses: dict[str, HostStatus] = {}
-    if ctx_obj.get("all"):
-        host_statuses = probe_reachability(list(config.hosts.keys()))
-    else:
-        # Local-only: synthesize a self-status without an SSH probe.
-        host_statuses[config.self_hostname] = HostStatus(
-            name=config.self_hostname,
-            reachable=True,
-            last_probed=datetime.now(tz=UTC),
-            error=None,
-        )
+    host_statuses: dict[str, HostStatus] = probe_reachability(list(config.hosts.keys()))
 
     # Phase 4 may not yet have lineage merged; Phase 6 stubs an empty dict.
     lineage: dict = {}  # Phase 9 fills in via lineage.json reads.
@@ -57,11 +41,7 @@ def run_picker(*, config: Config, home: Path, ctx_obj: dict) -> int:
         home=home,
     )
     # Re-read after reconcile may have changed assertions.
-    assertions_per_host = {
-        config.self_hostname: read_local_assertions(
-            config.storage.state_root, config.self_hostname
-        ),
-    }
+    assertions_per_host = read_all_assertions(config.storage.state_root)
     merged_assertions = merge_assertions(assertions_per_host)
 
     # 2. Apply pre-render filters.
@@ -102,11 +82,68 @@ def _apply_filters(
     ctx_obj: dict,
     home: Path,
 ) -> list[ClaudeSession]:
-    """Apply --orphans filter. Other filters (--host, --last) deferred to Phase 7."""
+    """Build the session list to present, matching spec behavior.
+
+    - Default: all hosts, all statuses, filtered to cwd == $PWD.
+    - --all: removes the cwd filter (all dirs).
+    - --orphans: local sessions without any assertion.
+    """
     orphans_only = ctx_obj.get("orphans", False)
     if orphans_only:
         return [s for s in sessions if s.sid not in assertions]
-    return [s for s in sessions if s.sid in assertions]  # exclude orphans by default
+
+    sessions_by_sid = {s.sid: s for s in sessions}
+
+    # Start from assertions (like ls does), not from local sessions.
+    result: list[ClaudeSession] = []
+    for sid, assertion_obj in assertions.items():
+        local = sessions_by_sid.get(sid)
+        if local is not None:
+            result.append(local)
+        elif isinstance(assertion_obj, Assertion):
+            result.append(
+                ClaudeSession(
+                    sid=sid,
+                    cwd=home / assertion_obj.cwd_normalized.lstrip("~/"),
+                    transcript_path=home / ".claude" / "stub",
+                    pid=None,
+                    status=None,
+                    started_at_ms=None,
+                    updated_at_ms=int(assertion_obj.asserted_at.timestamp() * 1000),
+                    name=None,
+                    version=None,
+                )
+            )
+
+    # Without --all, filter to sessions matching $PWD.
+    if not ctx_obj.get("all"):
+        from croam.paths import normalize_cwd
+
+        pwd_normalized = normalize_cwd(Path.cwd(), home)
+        result = [
+            s
+            for s in result
+            if _cwd_matches(s.sid, s.cwd, assertions, pwd_normalized, home)
+        ]
+
+    return result
+
+
+def _cwd_matches(
+    sid: str,
+    session_cwd: Path,
+    assertions: Mapping[str, object],
+    pwd_normalized: str,
+    home: Path,
+) -> bool:
+    """Check if a session's cwd matches the target (normalized PWD)."""
+    assertion = assertions.get(sid)
+    if isinstance(assertion, Assertion):
+        return assertion.cwd_normalized == pwd_normalized
+    # Fallback: compare session cwd directly.
+    from croam.paths import normalize_cwd
+
+    return normalize_cwd(session_cwd, home) == pwd_normalized
 
 
 def _dispatch(

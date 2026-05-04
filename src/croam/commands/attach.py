@@ -111,7 +111,7 @@ def run(
         )
 
     peer_alias = _peer_alias(owner, config)
-    argv = ["ssh", peer_alias, "croam", "attach", sid, "--here-on-owner"]
+    argv = ["ssh", "-t", peer_alias, f"bash -lc 'croam attach {sid} --here-on-owner'"]
     action = "ssh-recurse"
 
     logger.info("attach: {} argv={}", action, argv)

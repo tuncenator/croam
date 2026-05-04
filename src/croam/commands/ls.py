@@ -11,7 +11,7 @@ from typing import Any
 from loguru import logger
 
 from croam.config import Config
-from croam.ownership import merge_assertions, read_all_assertions, read_local_assertions
+from croam.ownership import merge_assertions, read_all_assertions
 from croam.paths import denormalize_cwd
 from croam.sessions import discover_local_sessions
 
@@ -89,13 +89,8 @@ def run(
     sessions = discover_local_sessions(home)
     sessions_by_sid = {s.sid: s for s in sessions}
 
-    # 2. Read ownership assertions.
-    if all_mode:
-        per_host = read_all_assertions(config.storage.state_root)
-    else:
-        local = read_local_assertions(config.storage.state_root, config.self_hostname)
-        per_host = {config.self_hostname: local}
-
+    # 2. Read ownership assertions (always all hosts; --all only gates cwd filter).
+    per_host = read_all_assertions(config.storage.state_root)
     merged = merge_assertions(per_host)
 
     # 3. Build the combined set of sids to report.

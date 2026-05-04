@@ -16,19 +16,36 @@ def make_fake_fzf(
     *,
     output: str,
     exit_code: int = 0,
+    write_keyfile: str | None = None,
 ) -> Path:
     """Create an executable fake-fzf script that emits `output` and exits with `exit_code`.
 
     The script discards its stdin (fzf would consume it; for tests we don't need to round-trip).
+    If `write_keyfile` is set, the script extracts the keyfile path from its argv
+    (looking for --bind=p:execute-silent(echo p > KEYFILE)+accept) and writes the value.
     Returns the path to the script. Caller passes it as `fzf_binary=str(path)`.
     """
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(parents=True, exist_ok=True)
     script = bin_dir / "fake_fzf"
+
+    keyfile_logic = ""
+    if write_keyfile is not None:
+        keyfile_logic = (
+            "# Extract keyfile path from argv and write the action key.\n"
+            "for arg in \"$@\"; do\n"
+            "  if [[ \"$arg\" == --bind=p:execute-silent* ]]; then\n"
+            "    KEYFILE=$(echo \"$arg\" | sed 's/.*echo .* > //;s/).*//') \n"
+            f"    printf '%s' {_shell_quote(write_keyfile)} > \"$KEYFILE\"\n"
+            "    break\n"
+            "  fi\n"
+            "done\n"
+        )
+
     body = (
         "#!/bin/bash\n"
-        "# Discard stdin so the parent's pipe doesn't fill.\n"
         "cat > /dev/null\n"
+        f"{keyfile_logic}"
         f"printf '%s' {_shell_quote(output)}\n"
         f"exit {exit_code}\n"
     )

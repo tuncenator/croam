@@ -244,23 +244,29 @@ def test_compute_action_intersection_empty(home):
     assert compute_action_intersection([], self_hostname="self") == set()
 
 
-def test_build_fzf_argv_includes_required_flags(home):
-    argv = build_fzf_argv(filter_pwd=Path("/home/tunc/Programs/croam"))
+def test_build_fzf_argv_includes_required_flags(home, tmp_path):
+    keyfile = str(tmp_path / "keyfile")
+    argv = build_fzf_argv(filter_pwd=Path("/home/tunc/Programs/croam"), keyfile=keyfile)
     assert "--multi" in argv
     assert "--ansi" in argv
     assert "--with-nth=2,6,7,8,9" in argv
-    assert "--expect=p,c,f,C,F,ctrl-r" in argv
+    assert "--expect=ctrl-r" in argv
+    # Action keys gated behind mode transition, not in --expect.
+    assert not any("--expect=p" in a for a in argv)
     assert any("--bind=multi:transform-header" in a for a in argv)
     assert any(a.startswith("--query=") and "/home/tunc/Programs/croam" in a for a in argv)
+    # Action keys start unbound.
+    assert any("start:unbind(p,c,f,C,F)" in a for a in argv)
 
 
-def test_build_fzf_argv_no_pwd(home):
-    argv = build_fzf_argv(filter_pwd=None)
+def test_build_fzf_argv_no_pwd(home, tmp_path):
+    keyfile = str(tmp_path / "keyfile")
+    argv = build_fzf_argv(filter_pwd=None, keyfile=keyfile)
     assert not any(a.startswith("--query=") for a in argv)
 
 
-def test_launch_picker_happy_path(home, tmp_path, monkeypatch):
-    """fake-fzf prints '<key>\\n<row1>\\n<row2>'; assert (key, [row1, row2])."""
+def test_launch_picker_happy_path_keyfile(home, tmp_path, monkeypatch):
+    """Action-mode key 'p' is communicated via keyfile, not --expect output."""
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
 
     rows = [
@@ -290,15 +296,46 @@ def test_launch_picker_happy_path(home, tmp_path, monkeypatch):
     fake = make_fake_fzf(
         tmp_path,
         output=(
-            "p\n"
+            "\n"
             "row1-sid\to\trunning-idle\treachable\tpresent\th\t-\t~\tr1\n"
             "row2-sid\to\trunning-idle\treachable\tpresent\th\t-\t~\tr2\n"
         ),
         exit_code=0,
+        write_keyfile="p",
     )
     key, selected = launch_picker(rows, filter_pwd=None, fzf_binary=str(fake))
     assert key == "p"
     assert [r.sid for r in selected] == ["row1-sid", "row2-sid"]
+
+
+def test_launch_picker_happy_path_expect(home, tmp_path, monkeypatch):
+    """ctrl-r still works via --expect (first line of fzf output)."""
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+
+    rows = [
+        PickerRow(
+            sid="row1-sid",
+            glyph="o",
+            status_word="running-idle",
+            reach_word="reachable",
+            cwd_word="present",
+            host="h",
+            last="-",
+            cwd_display="~",
+            name="r1",
+        ),
+    ]
+    fake = make_fake_fzf(
+        tmp_path,
+        output=(
+            "ctrl-r\n"
+            "row1-sid\to\trunning-idle\treachable\tpresent\th\t-\t~\tr1\n"
+        ),
+        exit_code=0,
+    )
+    key, selected = launch_picker(rows, filter_pwd=None, fzf_binary=str(fake))
+    assert key == "ctrl-r"
+    assert [r.sid for r in selected] == ["row1-sid"]
 
 
 def test_launch_picker_cancel(home, tmp_path, monkeypatch):

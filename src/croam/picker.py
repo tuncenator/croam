@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -197,35 +198,83 @@ def format_input_lines(rows: list[PickerRow]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# fzf argv construction
+# fzf argv construction (two-mode: Filter -> Action)
 # ---------------------------------------------------------------------------
 
-_DEFAULT_HEADER = (
-    "enter:attach  p:peek  c:claim  f:fork  C:claim --here  F:fork --here  ctrl-r:reload"
+_FILTER_HEADER = "type to filter | enter=select | ctrl-r=reload"
+_ACTION_HEADER = (
+    "enter:attach  p:peek  c:claim  C:claim-here  f:fork  F:fork-here  esc:back"
 )
 
 
 def build_fzf_argv(
     filter_pwd: Path | None,
     *,
-    header_default: str = _DEFAULT_HEADER,
+    keyfile: str,
 ) -> list[str]:
-    """Construct the fzf argv. Pure function."""
+    """Construct the fzf argv with two-mode bindings.
+
+    Filter mode (initial): user types freely, action keys unbound.
+    Action mode (after Enter): action keys active, header shows hotkeys.
+    """
+    action_hdr = _ACTION_HEADER
+    filter_hdr = _FILTER_HEADER
+
+    # Enter: in filter mode -> transition to action mode.
+    #         in action mode -> accept (attach).
+    mode_file = keyfile + ".mode"
+    enter_transform = (
+        f"transform:if [[ -f '{mode_file}' ]]; then"
+        f"  echo 'accept';"
+        f" else"
+        f"  touch '{mode_file}';"
+        f"  echo 'unbind(change)+change-prompt(> )"
+        f"+change-header({action_hdr})"
+        f"+rebind(p,c,f,C,F)';"
+        f" fi"
+    )
+
+    # Esc: in action mode -> back to filter mode.
+    #       in filter mode -> abort.
+    esc_transform = (
+        f"transform:if [[ -f '{mode_file}' ]]; then"
+        f"  rm -f '{mode_file}';"
+        f"  echo 'change-prompt(filter> )"
+        f"+change-header({filter_hdr})"
+        f"+unbind(p,c,f,C,F)+rebind(change)';"
+        f" else"
+        f"  echo 'abort';"
+        f" fi"
+    )
+
     argv = [
         "fzf",
         "--multi",
         "--ansi",
         "--delimiter=\t",
         "--with-nth=2,6,7,8,9",
-        "--expect=p,c,f,C,F,ctrl-r",
-        "--bind=tab:toggle+down",
-        "--bind=shift-tab:toggle+up",
-        '--bind=multi:transform-header:echo "$FZF_SELECT_COUNT/$FZF_MATCH_COUNT selected"',
-        f"--header={header_default}",
+        "--prompt=filter> ",
+        f"--header={filter_hdr}",
         "--height=80%",
         "--layout=reverse",
         "--preview=printf 'sid: {1}\\n(preview pane to be filled in v2)\\n'",
         "--preview-window=right:50%:wrap",
+        # Tab for multi-select works in both modes.
+        "--bind=tab:toggle+down",
+        "--bind=shift-tab:toggle+up",
+        '--bind=multi:transform-header:echo "$FZF_SELECT_COUNT/$FZF_MATCH_COUNT selected"',
+        # Mode transitions.
+        f"--bind=enter:{enter_transform}",
+        f"--bind=esc:{esc_transform}",
+        # Action keys: unbound at start, rebound when entering action mode.
+        f"--bind=p:execute-silent(echo p > {keyfile})+accept",
+        f"--bind=c:execute-silent(echo c > {keyfile})+accept",
+        f"--bind=f:execute-silent(echo f > {keyfile})+accept",
+        f"--bind=C:execute-silent(echo C > {keyfile})+accept",
+        f"--bind=F:execute-silent(echo F > {keyfile})+accept",
+        "--bind=start:unbind(p,c,f,C,F)",
+        # ctrl-r always available (no conflict with typing).
+        "--expect=ctrl-r",
     ]
     if filter_pwd is not None:
         argv.append(f"--query={filter_pwd.as_posix()}")
@@ -246,7 +295,7 @@ def launch_picker(
 ) -> tuple[str, list[PickerRow]]:
     """Run fzf, return (expect_key, selected_rows).
 
-    expect_key="" means plain Enter.
+    expect_key="" means plain Enter (attach).
     selected_rows is empty on cancel (rc=130) or no-match (rc=1).
     Raises CroamError on rc=2 (fzf error) or rc in (126, 127) (exec failure).
     """
@@ -259,51 +308,73 @@ def launch_picker(
         logger.warning("launch_picker called with zero rows; returning empty")
         return "", []
 
-    argv = [fzf_binary, *build_fzf_argv(filter_pwd)[1:]]
-    stdin_data = format_input_lines(rows)
+    # Temp file for action key communication from fzf bindings.
+    keyfd, keyfile = tempfile.mkstemp(prefix="croam-key-")
+    os.close(keyfd)
+    mode_file = keyfile + ".mode"
 
-    # Sanitize env so user's FZF_DEFAULT_OPTS doesn't poison our flags.
-    env = {**os.environ, "FZF_DEFAULT_OPTS": ""}
-    if env_overrides:
-        env.update(env_overrides)
+    try:
+        argv = [fzf_binary, *build_fzf_argv(filter_pwd, keyfile=keyfile)[1:]]
+        stdin_data = format_input_lines(rows)
 
-    logger.debug("launching fzf: argv={}, n_rows={}", argv, len(rows))
+        env = {**os.environ, "FZF_DEFAULT_OPTS": ""}
+        if env_overrides:
+            env.update(env_overrides)
 
-    proc = subprocess.Popen(
-        argv,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=None,
-        env=env,
-        text=True,
-        encoding="utf-8",
-    )
-    out, _ = proc.communicate(stdin_data)
-    rc = proc.returncode
+        logger.debug("launching fzf: argv={}, n_rows={}", argv, len(rows))
 
-    if rc in (130, 1):
-        return "", []
-    if rc in (2, 126, 127):
-        raise CroamError(f"fzf exited with code {rc}")
-    if rc != 0:
-        raise CroamError(f"fzf exited unexpectedly with code {rc}")
+        proc = subprocess.Popen(
+            argv,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=None,
+            env=env,
+            text=True,
+            encoding="utf-8",
+        )
+        out, _ = proc.communicate(stdin_data)
+        rc = proc.returncode
 
-    lines = out.splitlines()
-    if not lines:
-        return "", []
+        if rc in (130, 1):
+            return "", []
+        if rc in (2, 126, 127):
+            raise CroamError(f"fzf exited with code {rc}")
+        if rc != 0:
+            raise CroamError(f"fzf exited unexpectedly with code {rc}")
 
-    expect_key = lines[0]
-    selected_lines = lines[1:]
-    by_sid = {r.sid: r for r in rows}
-    selected_rows = []
-    for raw in selected_lines:
-        sid = raw.split("\t", 1)[0]
-        row = by_sid.get(sid)
-        if row is not None:
-            selected_rows.append(row)
-        else:
-            logger.warning("fzf returned sid={!r} not in input rows; skipping", sid)
-    return expect_key, selected_rows
+        lines = out.splitlines()
+        if not lines:
+            return "", []
+
+        # --expect line is always first (ctrl-r or empty).
+        expect_key = lines[0]
+        selected_lines = lines[1:]
+
+        # If expect_key is empty, check the keyfile for action mode keys.
+        if not expect_key:
+            try:
+                key_content = Path(keyfile).read_text().strip()
+                if key_content:
+                    expect_key = key_content
+            except OSError:
+                pass
+
+        by_sid = {r.sid: r for r in rows}
+        selected_rows = []
+        for raw in selected_lines:
+            sid = raw.split("\t", 1)[0]
+            row = by_sid.get(sid)
+            if row is not None:
+                selected_rows.append(row)
+            else:
+                logger.warning("fzf returned sid={!r} not in input rows; skipping", sid)
+        return expect_key, selected_rows
+    finally:
+        import contextlib
+
+        for f in (keyfile, mode_file):
+            with contextlib.suppress(OSError):
+                os.unlink(f)
 
 
 # ---------------------------------------------------------------------------

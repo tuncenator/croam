@@ -47,7 +47,7 @@ def _probe_one(host: str, timeout_s: float, now: datetime) -> HostStatus:
     return HostStatus(name=host, reachable=False, last_probed=now, error=err)
 
 
-def probe_reachability(hosts: list[str], timeout_s: float = 2.0) -> dict[str, HostStatus]:
+def probe_reachability(hosts: list[str], timeout_s: float = 5.0) -> dict[str, HostStatus]:
     """Probe SSH reachability for all hosts in parallel.
 
     Returns a dict mapping hostname to HostStatus. Empty dict for empty input.
