@@ -150,6 +150,8 @@ dev = [
     { name = "pyright" },
     { name = "pytest" },
     { name = "pytest-cov" },
+]
+lint = [
     { name = "ruff" },
 ]
 
@@ -164,8 +166,8 @@ dev = [
     { name = "pyright", specifier = ">=1.1.380" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-cov", specifier = ">=5.0" },
-    { name = "ruff", specifier = ">=0.6" },
 ]
+lint = [{ name = "ruff", specifier = ">=0.6" }]
 
 [[package]]
 name = "iniconfig"
