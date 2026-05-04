@@ -3,7 +3,7 @@
 > **Living document** -- each phase updates this with new discoveries and changes.
 > Read this before exploring the codebase. It may already have what you need.
 >
-> Last updated by: Phase 0 - Initial Setup (2026-05-04)
+> Last updated by: Checkpoint 1 - Phase 1 Glyphs and Colors (2026-05-04)
 
 ---
 
@@ -89,7 +89,8 @@ class PickerRow:
 
 ### Key picker functions
 
-- `compute_glyph(host_status: HostStatus | None) -> str`: Returns reachability indicator
+- `compute_glyph(host_status: HostStatus | None) -> str`: Returns Unicode circle glyphs: `"●"` reachable, `"○"` unreachable, `"?"` unknown
+- `colorize_glyph(glyph: str, status_word: str) -> str`: Wraps glyph in ANSI escape codes based on status_word (green/yellow/gray/dim); unknown status returns glyph unchanged
 - `compute_status_word(session, host_status) -> str`: Returns status category string
 - `format_last_column(updated_at_ms: int | None, now: datetime) -> str`: Relative time formatting
 - `render_rows(sessions, assertions, host_statuses, pwd, lineage, ...) -> list[PickerRow]`: Main row builder
@@ -115,7 +116,8 @@ class PickerRow:
 - **Test safety**: All tests require HOME redirection via the `home` fixture. The `pytest_runtest_call` hook enforces this.
 - **Fake subprocess pattern**: Tests that involve fzf use `make_fake_fzf()` which creates an executable script in `tmp_path` that emits canned stdout and optionally writes to a keyfile
 - **Wire format**: fzf stdin is tab-delimited columns with `--with-nth=2,6,7,8,9` controlling which columns are visible. Column 1 (sid) is always hidden but used for identification.
-- **ANSI passthrough**: fzf is invoked with `--ansi` flag, so ANSI escape sequences in the input are rendered as colors (currently unused but infrastructure is ready)
+- **ANSI passthrough**: fzf is invoked with `--ansi` flag, so ANSI escape sequences in the input are rendered as colors. `render_rows()` now applies `colorize_glyph()` so `PickerRow.glyph` contains ANSI-wrapped Unicode circles.
+- **Status-to-color mapping**: `_STATUS_ANSI` dict maps status_word to ANSI codes: `running-idle` -> green (`\033[32m`), `running-busy` -> yellow (`\033[33m`), `archived` -> gray (`\033[90m`), `unreachable` -> dim (`\033[2m`)
 
 ### End-to-end picker flow
 
