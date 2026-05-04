@@ -226,7 +226,9 @@ class TestInstallCctakeoverAlias:
         assert result_un.returncode == 0, f"uninstall failed: {result_un.stdout!r}"
 
         content = bashrc.read_text()
-        assert "alias cctakeover" not in content, f"alias still present after uninstall: {content!r}"
+        assert "alias cctakeover" not in content, (
+            f"alias still present after uninstall: {content!r}"
+        )
         assert self.MARKER not in content, f"marker still present after uninstall: {content!r}"
         # Pre-existing content should survive
         assert "pre-existing line" in content
