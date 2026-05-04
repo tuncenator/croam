@@ -56,6 +56,17 @@ Phase plan specifies `Functional: yes` with 5 checks. Phase summary contains "Fu
 
 ---
 
+## Code Review Results
+
+**Result**: PASSED WITH NOTES
+
+No blocking issues. Two minor observations:
+
+1. **Minor**: `_scrub()` call on `r.glyph` in `format_input_lines()` is technically unnecessary for ANSI glyphs (no tabs/newlines/CRs to strip), but harmless and maintains uniform column treatment.
+2. **Minor**: `test_compute_glyph_reachable_returns_filled_circle` and `test_compute_glyph_unreachable_returns_open_circle` use containment checks (`in`) while `test_compute_glyph_none_returns_question_mark` uses equality (`==`). Equality would be more precise for bare glyph returns, but this is cosmetic.
+
+---
+
 ## Smoke Probe
 
 Pending deploy-verify.
