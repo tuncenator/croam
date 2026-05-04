@@ -3,7 +3,7 @@
 > **Living document** -- each phase updates this with new discoveries and changes.
 > Read this before exploring the codebase. It may already have what you need.
 >
-> Last updated by: Checkpoint 2 - Phase 2 Display Formatting (2026-05-04)
+> Last updated by: Checkpoint 3 - Phase 3 Preview Pane (2026-05-04)
 
 ---
 
@@ -17,6 +17,7 @@ Key layers:
 - **Ownership** (`src/croam/ownership.py`): assertion-based ownership tracking across hosts
 - **Picker** (`src/croam/picker.py`): fzf row rendering, argv construction, subprocess orchestration, action intersection
 - **Transcript** (`src/croam/transcript.py`): read-only JSONL transcript rendering
+- **Preview** (`src/croam/preview.py`): Preview pane rendering (metadata block + conversation tail)
 - **Host probing** (`src/croam/hosts.py`): SSH-based reachability checks
 
 ---
@@ -31,7 +32,8 @@ Key layers:
 | `src/croam/hosts.py` | Host reachability probing | Provides `HostStatus` dataclass |
 | `src/croam/ownership.py` | Ownership assertion tracking | Provides `Assertion` dataclass |
 | `src/croam/paths.py` | Path encoding/decoding for claude project dirs | `decode_cwd()`, `encode_cwd()` |
-| `src/croam/cli.py` | CLI entry point (typer) | Subcommands: ls, attach, peek, claim, fork, etc. |
+| `src/croam/preview.py` | Preview pane rendering | `render_preview()`, `extract_conversation_tail()`, targeted session lookup |
+| `src/croam/cli.py` | CLI entry point (typer) | Subcommands: ls, attach, peek, claim, fork, preview (hidden), etc. |
 | `src/croam/errors.py` | Custom exception hierarchy | `CroamError` base class |
 | `src/croam/log.py` | Loguru configuration | Already set up |
 | `tests/conftest.py` | Test fixtures: fake HOME, ssh shim, safety guard | `home` fixture redirects HOME to tmp |
@@ -39,6 +41,7 @@ Key layers:
 | `tests/_helpers/synth_jsonl.py` | Synthetic JSONL transcript builder | `build_jsonl()` creates test transcripts |
 | `tests/_helpers/synth_session.py` | Synthetic session metadata builder | Session JSON file creation |
 | `tests/test_display_formatting.py` | Tests for fish_truncate_path, extract_first_user_message, render_rows integration | 22 tests covering Phase 2 display formatting |
+| `tests/test_preview.py` | Preview module tests | 11 tests for conversation tail extraction, render_preview, fzf argv wiring |
 | `tests/test_picker.py` | Picker unit/integration tests | 15+ tests covering formatters, rows, fzf argv, launch |
 
 ---
@@ -98,8 +101,18 @@ class PickerRow:
 - `format_last_column(updated_at_ms: int | None, now: datetime) -> str`: Relative time formatting
 - `render_rows(sessions, assertions, host_statuses, pwd, lineage, ...) -> list[PickerRow]`: Main row builder. Applies `fish_truncate_path()` to `cwd_display`. For unnamed sessions, falls back to first user message then `sid[:8]`.
 - `format_input_lines(rows: list[PickerRow]) -> str`: Tab-joined fzf stdin wire format
-- `build_fzf_argv(filter_pwd, *, keyfile) -> list[str]`: Constructs fzf argv with two-mode bindings
+- `build_fzf_argv(filter_pwd, *, keyfile) -> list[str]`: Constructs fzf argv with two-mode bindings; uses `--preview=croam preview {1}` for the preview pane
 - `launch_picker(rows, filter_pwd, ...) -> tuple[str, list[PickerRow]]`: Runs fzf subprocess
+
+### preview.py
+
+- `extract_conversation_tail(jsonl_path: Path, n: int = 10, max_msg_chars: int = 200) -> list[tuple[str, str]]`: Returns last n user/assistant messages as (role, text) tuples. Truncates at max_msg_chars with "..." suffix. Returns empty list on missing/unreadable files.
+- `render_preview(sid: str, home: Path) -> str`: Full preview pane text: metadata block (owner, status, fish-truncated cwd, actions) + conversation tail. Never raises; returns fallback on error.
+- `_find_transcript(sid, home)`: Targeted lookup in `~/.claude/projects/*/` for `<sid>.jsonl`
+- `_find_session_metadata(sid, home)`: Targeted lookup in `~/.claude/sessions/*.json` by sessionId
+- `_find_owner(sid, home)`: Scans `~/.local/share/croam/*/ownership.json` for owner assertion
+- `_derive_status(meta)`: Returns running-idle/running-busy/archived from session metadata
+- `_derive_actions(status, cwd_exists)`: Lists available actions based on status and cwd presence
 
 ### transcript.py
 
