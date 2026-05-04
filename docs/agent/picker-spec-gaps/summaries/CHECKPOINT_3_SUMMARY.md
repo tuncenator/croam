@@ -62,6 +62,18 @@ No criteria were deferred in the phase summary. All verification was done locall
 
 ---
 
+## Code Review Results
+
+**Result**: PASSED WITH NOTES
+
+No blocking issues. Three minor observations:
+
+1. **Minor**: `_derive_actions` in preview.py gates "attach" on running status, while `_row_safe_actions` in picker.py gates it on host reachability. Preview may show "attach" for unreachable hosts. Acceptable approximation for a preview pane (SSH probe per cursor move would be slow). Already noted in phase summary's Known Issues.
+2. **Minor**: Bare `except Exception` in `cmd_preview` (cli.py) swallows errors without logging. Adding `logger.debug` would align with the "log before swallowing" cross-cutting pattern.
+3. **Minor**: Cross-module import of private `_extract_text` from transcript.py. Works fine but the underscore convention signals module-internal. Third consumer now (picker.py and preview.py both import it).
+
+---
+
 ## Smoke Probe
 
 Pending deploy-verify. No smoke harness configured for this feature.
