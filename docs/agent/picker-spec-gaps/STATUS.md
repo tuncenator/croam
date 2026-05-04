@@ -50,7 +50,7 @@
 ### Conductor
 
 - **Total Batches**: 3
-- **Current Batch**: 0 (not started)
+- **Current Batch**: 2
 - **Pacing**: full-auto
 - **Batches Per Session**: N/A
 - **Execution Plan**: docs/agent/picker-spec-gaps/EXECUTION_PLAN.md
@@ -58,16 +58,16 @@
 ---
 
 **Last Updated:** 2026-05-04
-**Current Phase:** 1 of 3
-**Phase Name:** Glyphs and Colors
-**Progress:** 0% (0/3 phases complete)
+**Current Phase:** 2 of 3
+**Phase Name:** Display Formatting
+**Progress:** 33% (1/3 phases complete)
 
 ---
 
 ## Progress Bar
 
 ```
-[--------------------] 0% (0/3)
+[######--------------] 33% (1/3)
 ```
 
 ---
@@ -76,22 +76,22 @@
 
 | Phase | Name | Status |
 |-------|------|--------|
-| 1 | Glyphs and Colors | `[Current]` |
-| 2 | Display Formatting | `[Pending]` |
+| 1 | Glyphs and Colors | `[Complete]` |
+| 2 | Display Formatting | `[Current]` |
 | 3 | Preview Pane | `[Pending]` |
 
 ---
 
 ## Instructions for Agents
 
-1. Read `phase_plans/PHASE_01.md` for detailed requirements for Phase 1
-2. This is the first phase - no previous summaries to read
+1. Read `phase_plans/PHASE_02.md` for detailed requirements for Phase 2
+2. Read recent summaries: `summaries/PHASE_01_SUMMARY.md`
 3. Complete the phase following the build-verify-commit cycle
-4. Create `summaries/PHASE_01_SUMMARY.md`
+4. Create `summaries/PHASE_02_SUMMARY.md`
 5. Update this file:
-   - Mark Phase 1 as `[Complete]`
-   - Set Phase 2 as `[Current]`
-   - Update "Current Phase" to "2 of 3"
+   - Mark Phase 2 as `[Complete]`
+   - Set Phase 3 as `[Current]`
+   - Update "Current Phase" to "3 of 3"
    - Update "Progress" percentage and count
    - Update progress bar (each `#` = completed phase, each `-` = remaining phase)
 
