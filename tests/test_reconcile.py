@@ -88,14 +88,10 @@ class TestReconcileAutoDiscard:
 
         # Peer claimed it
         t2 = datetime.now(UTC) + timedelta(seconds=1)
-        their = build_assertion(
-            sid, "vicar", t2, action="claim", previous_owner="stormtree"
-        )
+        their = build_assertion(sid, "vicar", t2, action="claim", previous_owner="stormtree")
         write_assertions_file(state_root, "vicar", {sid: their})
 
-        action = reconcile_one(
-            sid, state_root=state_root, hostname="stormtree", home=home
-        )
+        action = reconcile_one(sid, state_root=state_root, hostname="stormtree", home=home)
         assert action == "discard"
 
         # Our local assertion should be removed (flattened out)
@@ -127,17 +123,13 @@ class TestReconcilePromptFork:
 
         # Peer claimed
         t2 = datetime.now(UTC) + timedelta(seconds=1)
-        their = build_assertion(
-            sid, "vicar", t2, action="claim", previous_owner="stormtree"
-        )
+        their = build_assertion(sid, "vicar", t2, action="claim", previous_owner="stormtree")
         write_assertions_file(state_root, "vicar", {sid: their})
 
         # User chooses fork
         monkeypatch.setattr("builtins.input", lambda _: "f")
 
-        action = reconcile_one(
-            sid, state_root=state_root, hostname="stormtree", home=home
-        )
+        action = reconcile_one(sid, state_root=state_root, hostname="stormtree", home=home)
         assert action == "fork"
 
     def test_prompt_discard_when_new_lines(
@@ -160,16 +152,12 @@ class TestReconcilePromptFork:
         write_assertions_file(state_root, "stormtree", {sid: assertion})
 
         t2 = datetime.now(UTC) + timedelta(seconds=1)
-        their = build_assertion(
-            sid, "vicar", t2, action="claim", previous_owner="stormtree"
-        )
+        their = build_assertion(sid, "vicar", t2, action="claim", previous_owner="stormtree")
         write_assertions_file(state_root, "vicar", {sid: their})
 
         monkeypatch.setattr("builtins.input", lambda _: "d")
 
-        action = reconcile_one(
-            sid, state_root=state_root, hostname="stormtree", home=home
-        )
+        action = reconcile_one(sid, state_root=state_root, hostname="stormtree", home=home)
         assert action == "discard"
 
         assertions = read_local_assertions(state_root, "stormtree")
@@ -194,25 +182,19 @@ class TestReconcileNoSnapshot:
         write_assertions_file(state_root, "stormtree", {sid: assertion})
 
         t2 = datetime.now(UTC) + timedelta(seconds=1)
-        their = build_assertion(
-            sid, "vicar", t2, action="claim", previous_owner="stormtree"
-        )
+        their = build_assertion(sid, "vicar", t2, action="claim", previous_owner="stormtree")
         write_assertions_file(state_root, "vicar", {sid: their})
 
         monkeypatch.setattr("builtins.input", lambda _: "f")
 
-        action = reconcile_one(
-            sid, state_root=state_root, hostname="stormtree", home=home
-        )
+        action = reconcile_one(sid, state_root=state_root, hostname="stormtree", home=home)
         assert action == "fork"
 
 
 class TestReconcileAll:
     """Test reconcile_all orchestration."""
 
-    def test_reconcile_all_empty(
-        self, home: Path, state_root: Path, _config_file: Path
-    ) -> None:
+    def test_reconcile_all_empty(self, home: Path, state_root: Path, _config_file: Path) -> None:
         """No outclaimed sessions returns empty list."""
         from croam.commands.reconcile import reconcile_all
 
@@ -236,10 +218,7 @@ class TestReconcileAll:
             write_snapshot(state_root, "stormtree", sid, 4)
 
         # Write our assertions
-        our_assertions = {
-            sid: build_assertion(sid, "stormtree", datetime.now(UTC))
-            for sid in sids
-        }
+        our_assertions = {sid: build_assertion(sid, "stormtree", datetime.now(UTC)) for sid in sids}
         write_assertions_file(state_root, "stormtree", our_assertions)
 
         # Vicar claims all of them
@@ -259,9 +238,7 @@ class TestReconcileAll:
 class TestReconcileNoJsonl:
     """Reconcile with no JSONL auto-discards."""
 
-    def test_no_jsonl_auto_discards(
-        self, home: Path, state_root: Path, _config_file: Path
-    ) -> None:
+    def test_no_jsonl_auto_discards(self, home: Path, state_root: Path, _config_file: Path) -> None:
         """If JSONL doesn't exist, auto-discard without prompting."""
         from croam.commands.reconcile import reconcile_one
 
@@ -271,12 +248,8 @@ class TestReconcileNoJsonl:
         write_assertions_file(state_root, "stormtree", {sid: assertion})
 
         t2 = datetime.now(UTC) + timedelta(seconds=1)
-        their = build_assertion(
-            sid, "vicar", t2, action="claim", previous_owner="stormtree"
-        )
+        their = build_assertion(sid, "vicar", t2, action="claim", previous_owner="stormtree")
         write_assertions_file(state_root, "vicar", {sid: their})
 
-        action = reconcile_one(
-            sid, state_root=state_root, hostname="stormtree", home=home
-        )
+        action = reconcile_one(sid, state_root=state_root, hostname="stormtree", home=home)
         assert action == "discard"

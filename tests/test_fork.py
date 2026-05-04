@@ -17,16 +17,12 @@ from tests._helpers.synth_jsonl import build_jsonl
 def _config_file(home: Path):
     """Write a minimal config for stormtree."""
     cfg = home / ".config" / "croam" / "config.toml"
-    cfg.write_text(
-        '[self]\nhostname = "stormtree"\n\n[hosts.stormtree]\nssh = "stormtree"\n'
-    )
+    cfg.write_text('[self]\nhostname = "stormtree"\n\n[hosts.stormtree]\nssh = "stormtree"\n')
     return cfg
 
 
 class TestFork:
-    def test_fork_creates_new_jsonl(
-        self, home: Path, state_root: Path, _config_file: Path
-    ) -> None:
+    def test_fork_creates_new_jsonl(self, home: Path, state_root: Path, _config_file: Path) -> None:
         """Fork should create a new JSONL file with a new sid."""
         from croam.commands.fork import run
 
@@ -39,9 +35,7 @@ class TestFork:
         )
         write_assertions_file(state_root, "stormtree", {sid: assertion})
 
-        fork_sid, rc = run(
-            sid, state_root=state_root, hostname="stormtree", home=home
-        )
+        fork_sid, rc = run(sid, state_root=state_root, hostname="stormtree", home=home)
         assert rc == 0
         assert fork_sid != sid
         # The new JSONL should exist
@@ -68,9 +62,7 @@ class TestFork:
         )
         write_assertions_file(state_root, "stormtree", {sid: assertion})
 
-        fork_sid, rc = run(
-            sid, state_root=state_root, hostname="stormtree", home=home
-        )
+        fork_sid, rc = run(sid, state_root=state_root, hostname="stormtree", home=home)
         assert rc == 0
 
         from croam.paths import encode_cwd
@@ -81,12 +73,9 @@ class TestFork:
         # Same line count (no trailing partial trimming needed in clean case)
         assert len(fork_lines) == len(original_lines)
 
-    def test_fork_writes_lineage(
-        self, home: Path, state_root: Path, _config_file: Path
-    ) -> None:
+    def test_fork_writes_lineage(self, home: Path, state_root: Path, _config_file: Path) -> None:
         """Fork should write a lineage entry with fork_n=1."""
         from croam.commands.fork import run
-
         from croam.ownership import read_lineage
 
         sid = str(uuid.uuid4())
@@ -98,9 +87,7 @@ class TestFork:
         )
         write_assertions_file(state_root, "stormtree", {sid: assertion})
 
-        fork_sid, rc = run(
-            sid, state_root=state_root, hostname="stormtree", home=home
-        )
+        fork_sid, rc = run(sid, state_root=state_root, hostname="stormtree", home=home)
         assert rc == 0
 
         lineage = read_lineage(state_root, "stormtree")
@@ -108,12 +95,9 @@ class TestFork:
         assert lineage[fork_sid].parent_sid == sid
         assert lineage[fork_sid].fork_n == 1
 
-    def test_fork_increments_fork_n(
-        self, home: Path, state_root: Path, _config_file: Path
-    ) -> None:
+    def test_fork_increments_fork_n(self, home: Path, state_root: Path, _config_file: Path) -> None:
         """Second fork of same parent should get fork_n=2."""
         from croam.commands.fork import run
-
         from croam.ownership import read_lineage
 
         sid = str(uuid.uuid4())
@@ -125,13 +109,9 @@ class TestFork:
         )
         write_assertions_file(state_root, "stormtree", {sid: assertion})
 
-        fork_sid1, rc1 = run(
-            sid, state_root=state_root, hostname="stormtree", home=home
-        )
+        fork_sid1, rc1 = run(sid, state_root=state_root, hostname="stormtree", home=home)
         assert rc1 == 0
-        fork_sid2, rc2 = run(
-            sid, state_root=state_root, hostname="stormtree", home=home
-        )
+        fork_sid2, rc2 = run(sid, state_root=state_root, hostname="stormtree", home=home)
         assert rc2 == 0
 
         lineage = read_lineage(state_root, "stormtree")
@@ -143,7 +123,6 @@ class TestFork:
     ) -> None:
         """Fork should create an ownership assertion for the new sid."""
         from croam.commands.fork import run
-
         from croam.ownership import read_local_assertions
 
         sid = str(uuid.uuid4())
@@ -155,9 +134,7 @@ class TestFork:
         )
         write_assertions_file(state_root, "stormtree", {sid: assertion})
 
-        fork_sid, rc = run(
-            sid, state_root=state_root, hostname="stormtree", home=home
-        )
+        fork_sid, rc = run(sid, state_root=state_root, hostname="stormtree", home=home)
         assert rc == 0
 
         assertions = read_local_assertions(state_root, "stormtree")
@@ -166,12 +143,9 @@ class TestFork:
         assert assertions[fork_sid].action == "create"
         assert assertions[fork_sid].cwd_normalized == "~/projects/epsilon"
 
-    def test_fork_writes_snapshot(
-        self, home: Path, state_root: Path, _config_file: Path
-    ) -> None:
+    def test_fork_writes_snapshot(self, home: Path, state_root: Path, _config_file: Path) -> None:
         """Fork should write a snapshot with the line count."""
         from croam.commands.fork import run
-
         from croam.snapshots import get_snapshot_line_count
 
         sid = str(uuid.uuid4())
@@ -183,9 +157,7 @@ class TestFork:
         )
         write_assertions_file(state_root, "stormtree", {sid: assertion})
 
-        fork_sid, rc = run(
-            sid, state_root=state_root, hostname="stormtree", home=home
-        )
+        fork_sid, rc = run(sid, state_root=state_root, hostname="stormtree", home=home)
         assert rc == 0
 
         # n_user=4 gives 2 header lines + 4 user lines = 6 lines
@@ -211,9 +183,7 @@ class TestFork:
         )
         write_assertions_file(state_root, "stormtree", {sid: assertion})
 
-        fork_sid, rc = run(
-            sid, state_root=state_root, hostname="stormtree", home=home
-        )
+        fork_sid, rc = run(sid, state_root=state_root, hostname="stormtree", home=home)
         assert rc == 0
 
         from croam.paths import encode_cwd
@@ -229,13 +199,10 @@ class TestFork:
     ) -> None:
         """Fork should raise SessionNotFound if JSONL doesn't exist."""
         from croam.commands.fork import run
-
         from croam.errors import SessionNotFound
 
         sid = str(uuid.uuid4())
-        assertion = build_assertion(
-            sid, "stormtree", datetime.now(UTC), cwd_normalized="~/missing"
-        )
+        assertion = build_assertion(sid, "stormtree", datetime.now(UTC), cwd_normalized="~/missing")
         write_assertions_file(state_root, "stormtree", {sid: assertion})
 
         with pytest.raises(SessionNotFound):
@@ -262,9 +229,7 @@ class TestFork:
         target_cwd.mkdir(parents=True)
         monkeypatch.chdir(target_cwd)
 
-        fork_sid, rc = run(
-            sid, state_root=state_root, hostname="stormtree", home=home, here=True
-        )
+        fork_sid, rc = run(sid, state_root=state_root, hostname="stormtree", home=home, here=True)
         assert rc == 0
 
         from croam.paths import encode_cwd

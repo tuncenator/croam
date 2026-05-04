@@ -82,8 +82,32 @@ def state_root(home: Path) -> Path:
     return root
 
 
+class SshShimRegistry:
+    """Canned-response registry for the fake ssh binary."""
+
+    def __init__(self, fixtures_dir: Path) -> None:
+        self._fixtures_dir = fixtures_dir
+
+    def register(
+        self,
+        host: str,
+        argv: list[str],
+        *,
+        stdout: str = "",
+        stderr: str = "",
+        exit_code: int = 0,
+        delay_s: float = 0.0,
+    ) -> None:
+        target = fixture_path_for(self._fixtures_dir, host, argv)
+        target.write_text(
+            json.dumps(
+                {"stdout": stdout, "stderr": stderr, "exit_code": exit_code, "delay_s": delay_s}
+            )
+        )
+
+
 @pytest.fixture
-def ssh_shim(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[object]:
+def ssh_shim(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[SshShimRegistry]:
     """Install a fake `ssh` binary on PATH that emits canned output keyed off (host, argv).
 
     Returns an object with `.register(host, argv, stdout='', stderr='', exit_code=0, delay_s=0.0)`.
@@ -100,25 +124,7 @@ def ssh_shim(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[object
 
     monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
 
-    class Registry:
-        def register(
-            self,
-            host: str,
-            argv: list[str],
-            *,
-            stdout: str = "",
-            stderr: str = "",
-            exit_code: int = 0,
-            delay_s: float = 0.0,
-        ) -> None:
-            target = fixture_path_for(fixtures_dir, host, argv)
-            target.write_text(
-                json.dumps(
-                    {"stdout": stdout, "stderr": stderr, "exit_code": exit_code, "delay_s": delay_s}
-                )
-            )
-
-    yield Registry()
+    yield SshShimRegistry(fixtures_dir)
 
 
 @pytest.fixture

@@ -16,9 +16,7 @@ from tests._helpers.synth_jsonl import build_jsonl
 def _config_file(home: Path):
     """Write a minimal config for stormtree."""
     cfg = home / ".config" / "croam" / "config.toml"
-    cfg.write_text(
-        '[self]\nhostname = "stormtree"\n\n[hosts.stormtree]\nssh = "stormtree"\n'
-    )
+    cfg.write_text('[self]\nhostname = "stormtree"\n\n[hosts.stormtree]\nssh = "stormtree"\n')
     return cfg
 
 
@@ -47,14 +45,15 @@ class TestRelease:
     ) -> None:
         """Release for a self-owned sid writes release assertion, removes JSONL."""
         from croam.commands.release import run
-
         from croam.ownership import read_local_assertions
 
         sid = str(uuid.uuid4())
         cwd = home / "projects" / "foo"
         cwd.mkdir(parents=True)
         build_jsonl(home, sid, cwd)
-        assertion = build_assertion(sid, "stormtree", datetime.now(UTC), cwd_normalized="~/projects/foo")
+        assertion = build_assertion(
+            sid, "stormtree", datetime.now(UTC), cwd_normalized="~/projects/foo"
+        )
         write_assertions_file(state_root, "stormtree", {sid: assertion})
 
         rc = run(sid, state_root=state_root, hostname="stormtree", home=home)
@@ -66,9 +65,7 @@ class TestRelease:
         assert assertions[sid].action == "release"
         assert assertions[sid].owner == "stormtree"
 
-    def test_release_is_idempotent(
-        self, home: Path, state_root: Path, _config_file: Path
-    ) -> None:
+    def test_release_is_idempotent(self, home: Path, state_root: Path, _config_file: Path) -> None:
         """Calling release twice for the same sid should succeed both times."""
         from croam.commands.release import run
 
@@ -76,7 +73,9 @@ class TestRelease:
         cwd = home / "projects" / "bar"
         cwd.mkdir(parents=True)
         build_jsonl(home, sid, cwd)
-        assertion = build_assertion(sid, "stormtree", datetime.now(UTC), cwd_normalized="~/projects/bar")
+        assertion = build_assertion(
+            sid, "stormtree", datetime.now(UTC), cwd_normalized="~/projects/bar"
+        )
         write_assertions_file(state_root, "stormtree", {sid: assertion})
 
         rc1 = run(sid, state_root=state_root, hostname="stormtree", home=home)
@@ -96,7 +95,9 @@ class TestRelease:
         jsonl_path = build_jsonl(home, sid, cwd, n_user=3)
         original_content = jsonl_path.read_bytes()
 
-        assertion = build_assertion(sid, "stormtree", datetime.now(UTC), cwd_normalized="~/projects/baz")
+        assertion = build_assertion(
+            sid, "stormtree", datetime.now(UTC), cwd_normalized="~/projects/baz"
+        )
         write_assertions_file(state_root, "stormtree", {sid: assertion})
 
         rc = run(sid, state_root=state_root, hostname="stormtree", home=home, emit_jsonl=True)

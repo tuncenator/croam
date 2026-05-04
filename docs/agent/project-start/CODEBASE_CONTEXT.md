@@ -3,7 +3,7 @@
 > **Living document** -- each phase updates this with new discoveries and changes.
 > Read this before exploring the codebase. It may already have what you need.
 >
-> Last updated by: Checkpoint 5 - Phase 7 merged (2026-05-04)
+> Last updated by: Checkpoint 6 - Phases 8, 9 merged (2026-05-04)
 
 ---
 
@@ -32,7 +32,7 @@ The full design lives at `docs/specs/2026-04-30-croam-design.md`. Phase 1 establ
 | `docs/agent/project-start/FUNCTIONAL_QA_STRATEGY.md` | Surfaces, user loops, anti-patterns, harness deliverables | Read in full when planning Functional QA checks. |
 | `pyproject.toml` | Project metadata, deps (typer, loguru), console script `croam = "croam.cli:main"`, tool configs (ruff, pyright, pytest) | Phase 1; entry point updated by Phase 6 from `croam.cli:app` to `croam.cli:main`. |
 | `src/croam/__init__.py` | Package marker (empty) | Phase 1. |
-| `src/croam/cli.py` | Full typer app: 7 public verbs (ls, attach, peek, claim, fork, launch, doctor) + hidden emit-state, global callback with --debug/--json/--all/-p/--host/--last/--orphans, no-verb picker dispatch, `main()` CroamError->SystemExit(2) handler. Phase 7 filled cmd_ls, cmd_attach (+ --no-exec), cmd_peek (+ --here-on-owner, --no-exec). | Phase 6 (structure), Phase 7 (verb bodies). |
+| `src/croam/cli.py` | Full typer app: 7 public verbs (ls, attach, peek, claim, fork, launch, doctor) + hidden emit-state + hidden release, global callback with --debug/--json/--all/-p/--host/--last/--orphans, no-verb picker dispatch, `main()` CroamError->SystemExit(2) handler. Phase 7 filled cmd_ls, cmd_attach, cmd_peek. Phase 8 filled cmd_claim, cmd_fork, added hidden cmd_release. Phase 9 (checkpoint 6) filled cmd_doctor. | Phase 6 (structure), Phase 7, 8, 9 (verb bodies). |
 | `src/croam/log.py` | `configure(level, log_file, debug)` for loguru; uses FilterDict-typed filter_map for pyright compat | Phase 1. |
 | `src/croam/errors.py` | `CroamError(Exception)` base + 7 subclasses: ConfigError, SshError, OwnershipConflict, TmuxError, SessionNotFound, OrphanRefused, TimeoutError | Phase 1. |
 | `src/croam/proc.py` | `run(argv, *, timeout, check, capture, env, cwd)` subprocess wrapper with DEBUG logging and TimeoutError translation | Phase 1. |
@@ -49,13 +49,18 @@ The full design lives at `docs/specs/2026-04-30-croam-design.md`. Phase 1 establ
 | `src/croam/shim.py` | Pure decision functions: `should_wrap`, `derive_sid`, `strip_no_tmux`, `find_claude_real`, `is_in_tmux` | Phase 5. 100% coverage. |
 | `src/croam/commands/launch.py` | `LaunchPlan` dataclass, `build_launch_plan` (pure), `launch_cmd` orchestrator with `--no-exec` mode and assertion-before-side-effect contract | Phase 5. 95% coverage. |
 | `src/croam/picker.py` | `PickerRow` dataclass, `format_last_column`, `compute_glyph`, `compute_status_word`, `render_rows`, `format_input_lines`, `build_fzf_argv`, `launch_picker`, `compute_action_intersection` | Phase 6. 91% coverage. |
-| `src/croam/commands/default.py` | `run_picker` orchestrator: discover -> filter -> render -> launch -> dispatch. `_dispatch` routes enter->attach, p->peek, ctrl-r->re-run, c/C/f/F->NotImplementedError("Phase 8"), multi-row with action intersection. | Phase 6 (structure), Phase 7 (full dispatch). |
+| `src/croam/commands/default.py` | `run_picker` orchestrator: discover -> filter -> render -> launch -> dispatch. `_dispatch` routes enter->attach, p->peek, ctrl-r->re-run, c/C->claim, f/F->fork, multi-row with action intersection. Phase 8 added reconcile_all before picker render. | Phase 6 (structure), Phase 7, 8 (full dispatch). |
 | `src/croam/transcript.py` | `render_static_transcript(jsonl_path, *, fp=sys.stdout) -> int`; `_extract_text(message_field) -> str` handles string/dict/list-block shapes | Phase 7. 100% coverage. |
 | `src/croam/commands/ls.py` | `run(ctx_obj, config, home) -> int`; JSON/text listing with --all, --host, --last, --orphans, PWD filter | Phase 7. 96% coverage. |
 | `src/croam/commands/peek.py` | `run(sid, ctx_obj, config, home, *, here_on_owner, no_exec) -> int`; local tmux/archived/remote reachable/unreachable mirror dispatch | Phase 7. 90% coverage. |
 | `src/croam/commands/attach.py` | `run(sid, ctx_obj, config, home, *, here_on_owner, no_exec) -> int`; recursion guard, tmux-attach/new-and-attach/ssh-recurse/SshError | Phase 7. 93% coverage. |
-| `src/croam/sync.py` | syncthing mirror access (read-only filesystem); conflict file detection | Created in Phase 9. |
-| `src/croam/doctor.py` | Diagnostics: config + SSH + syncthing + ownership consistency | Created in Phase 9. |
+| `src/croam/snapshots.py` | Snapshot line-count sidecar store: read/write/get for `<state_root>/<self>/snapshots.json` | Phase 8. |
+| `src/croam/commands/release.py` | Idempotent release (receiving side of claim handshake): kills tmux, removes JSONL, writes release assertion | Phase 8. |
+| `src/croam/commands/fork.py` | Fork with JSONL copy + lineage tracking + snapshot; supports --here cwd rebase | Phase 8. |
+| `src/croam/commands/claim.py` | Full claim state machine (S0-S6): ssh-strict pre-verify, cooperative/forced claim, snapshot | Phase 8. |
+| `src/croam/commands/reconcile.py` | Outclaim detection + fork-or-discard prompt, called before picker render | Phase 8. |
+| `src/croam/sync.py` | Syncthing mirror read helpers: read_peer_state_from_mirror, detect_conflict_files, mirror_freshness, mirror_jsonl_path | Phase 9. |
+| `src/croam/doctor.py` | Diagnostics: config + state_root + hosts + syncthing + ownership consistency + external tools + conflict files; bootstrap_config_if_missing | Phase 9 (checkpoint 6). |
 | `tests/conftest.py` | 5 fixtures (home, tmux_socket, ssh_shim, state_root, e2e_dummy) + `pytest_runtest_call` hookwrapper safety guard | Phase 1. |
 | `tests/_helpers/synth_jsonl.py` | `build_jsonl(home, sid, cwd)` with inlined `_encode_cwd` (standalone, no src/ deps) | Phase 1. |
 | `tests/_helpers/synth_session.py` | `build_session_metadata(home, pid, sid, cwd)` | Phase 1. |
@@ -75,7 +80,14 @@ The full design lives at `docs/specs/2026-04-30-croam-design.md`. Phase 1 establ
 | `tests/test_ls.py` | 10 tests for ls command (empty, JSON, text, PWD filter, --all, --host, orphans, --last) | Phase 7. |
 | `tests/test_peek.py` | 12 tests for peek command (local live/archived, remote reachable/unreachable, mirror, here_on_owner) | Phase 7. |
 | `tests/test_attach.py` | 10 tests for attach command (local running/archived, remote reachable/unreachable, recursion guard, picker fallback) | Phase 7. |
-| `tests/test_default_dispatch.py` | 11 tests for _dispatch routing (enter, p, ctrl-r, c/C/f/F phase 8 stubs, multi-row) | Phase 7. |
+| `tests/test_default_dispatch.py` | 11 tests for _dispatch routing (enter, p, ctrl-r, c/C/f/F, multi-row) | Phase 7, updated Phase 8. |
+| `tests/test_snapshots.py` | 13 tests for snapshot sidecar store | Phase 8. |
+| `tests/test_release.py` | 5 tests for release command | Phase 8. |
+| `tests/test_fork.py` | 9 tests for fork command | Phase 8. |
+| `tests/test_claim.py` | 15 tests for claim handshake state machine | Phase 8. |
+| `tests/test_reconcile.py` | 9 tests for outclaim reconciliation | Phase 8. |
+| `tests/test_sync.py` | 24 tests for syncthing mirror read helpers | Phase 9. |
+| `tests/test_doctor.py` | 17 tests for doctor diagnostics | Phase 9 (checkpoint 6). |
 | `tests/fixtures/` | Synthetic session JSONLs, ownership.json snapshots, sample TOML configs | Created across Phase 4, 7. |
 
 ---
@@ -439,6 +451,61 @@ def _dispatch(expect_key: str, selected: list[PickerRow], ctx_obj: dict,
     c/C/f/F->NotImplementedError('Phase 8'). Multi-row: iterates with action intersection check."""
 ```
 
+### Phase 8 (claim, fork, release, reconcile, snapshots) -- FINALIZED
+
+```python
+# src/croam/snapshots.py
+def read_snapshots(state_root: Path, hostname: str) -> dict[str, int]: ...
+def write_snapshot(state_root: Path, hostname: str, sid: str, line_count: int) -> None: ...
+def remove_snapshot(state_root: Path, hostname: str, sid: str) -> None: ...
+def get_snapshot_line_count(state_root: Path, hostname: str, sid: str) -> int | None: ...
+def count_jsonl_lines(jsonl_path: Path) -> int: ...
+
+# src/croam/commands/release.py
+def run(sid: str, requester_host: str, ctx_obj: dict, config: Config, home: Path) -> int:
+    """Receive a claim handshake on the owner side. Idempotent."""
+
+# src/croam/commands/fork.py
+def run(sid: str, *, state_root: Path, hostname: str, home: Path,
+        here: bool = False) -> tuple[str, int]:
+    """Fork session. Returns (fork_sid, exit_code)."""
+
+# src/croam/commands/claim.py
+def run(sid: str, *, state_root: Path, hostname: str, home: Path,
+        config_path: Path, here: bool = False, force: bool = False) -> int:
+    """Transfer ownership via cooperative handshake or forced claim."""
+
+# src/croam/commands/reconcile.py
+def reconcile_all(state_root: Path, hostname: str, home: Path, config: Config) -> int:
+    """Detect and prompt for all outclaimed sessions."""
+```
+
+### Phase 9 (sync, doctor) -- FINALIZED
+
+```python
+# src/croam/sync.py
+def read_peer_state_from_mirror(state_root: Path, peer_hostname: str) -> dict[str, Any] | None: ...
+def detect_conflict_files(state_root: Path) -> list[Path]: ...
+def mirror_freshness(state_root: Path, peer_hostname: str) -> timedelta | None: ...
+def mirror_jsonl_path(state_root: Path, peer_hostname: str, encoded_cwd: str, sid: str) -> Path | None: ...
+
+# src/croam/doctor.py
+@dataclass(frozen=True)
+class DiagnosticResult:
+    name: str; level: Literal["OK", "WARN", "FAIL"]; reason: str; detail: str | None = None
+
+def run_doctor(config_path: Path, home: Path) -> int:
+    """Orchestrator: bootstrap config if missing, run all checks, print report. Exit 0 if no FAILs."""
+def bootstrap_config_if_missing(config_path: Path, default_state_root: Path) -> bool: ...
+def check_config(config_path: Path) -> DiagnosticResult: ...
+def check_state_root_writable(state_root: Path) -> DiagnosticResult: ...
+def check_external_tools() -> list[DiagnosticResult]: ...
+def check_hosts(config: Config) -> list[DiagnosticResult]: ...
+def check_syncthing(state_root: Path, config: Config) -> list[DiagnosticResult]: ...
+def check_ownership_consistency(state_root: Path, hostnames: list[str]) -> list[DiagnosticResult]: ...
+def check_conflict_files(state_root: Path) -> DiagnosticResult: ...
+```
+
 Key design notes (Phase 7):
 - `--no-exec` is the test seam: outputs `{"action": "...", "argv": [...]}` JSON, exit 0.
 - `CROAM_NO_EXEC=1` env var also triggers no-exec mode.
@@ -593,6 +660,8 @@ Header line (top of file) is one of the metadata records (`last-prompt` or `perm
 Phase 2's `decode_cwd()` implements this via filesystem probe with the host's home as a hint (we know `/home/tunc/...` is more likely than `/home-tunc/...` in practice).
 
 This is a critical correction to the spec section 11 which said "slashes to dashes; verify exact escape rules from claude source during implementation." The empirical answer is: dots also become dashes, and decoding is lossy.
+
+**Empirical answer to claude-resume cwd enforcement (Phase 8)**: assumed NO enforcement (CROAM_E2E not available to test empirically; defaulted per spec section 15). Surgical JSONL rewrite code is present but unreachable in normal operation. The `--here` rebase only updates `cwd_normalized` in ownership.json and writes the JSONL into the encoded-$PWD directory; JSONL bytes are unchanged.
 
 ---
 

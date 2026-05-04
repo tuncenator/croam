@@ -65,9 +65,12 @@ def _probe_reachable(ssh_alias: str) -> bool:
     """Check if a host is reachable via SSH."""
     argv = [
         "ssh",
-        "-o", "ConnectTimeout=2",
-        "-o", "BatchMode=yes",
-        "-o", "StrictHostKeyChecking=no",
+        "-o",
+        "ConnectTimeout=2",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=no",
         ssh_alias,
         "true",
     ]
@@ -82,11 +85,16 @@ def _fetch_remote_state(ssh_alias: str) -> dict | None:
     """Fetch emit-state JSON from remote host."""
     argv = [
         "ssh",
-        "-o", "ConnectTimeout=2",
-        "-o", "BatchMode=yes",
-        "-o", "StrictHostKeyChecking=no",
+        "-o",
+        "ConnectTimeout=2",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=no",
         ssh_alias,
-        "croam", "emit-state", "--json",
+        "croam",
+        "emit-state",
+        "--json",
     ]
     try:
         result = proc.run(argv, timeout=5.0)
@@ -104,11 +112,16 @@ def _remote_release(ssh_alias: str, sid: str) -> bool:
     """Ask remote host to release a session."""
     argv = [
         "ssh",
-        "-o", "ConnectTimeout=2",
-        "-o", "BatchMode=yes",
-        "-o", "StrictHostKeyChecking=no",
+        "-o",
+        "ConnectTimeout=2",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=no",
         ssh_alias,
-        "croam", "release", sid,
+        "croam",
+        "release",
+        sid,
     ]
     try:
         result = proc.run(argv, timeout=5.0)
@@ -121,11 +134,15 @@ def _remote_fetch_jsonl(ssh_alias: str, remote_path: str) -> bytes | None:
     """Fetch JSONL content from remote host via cat over SSH."""
     argv = [
         "ssh",
-        "-o", "ConnectTimeout=2",
-        "-o", "BatchMode=yes",
-        "-o", "StrictHostKeyChecking=no",
+        "-o",
+        "ConnectTimeout=2",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=no",
         ssh_alias,
-        "cat", remote_path,
+        "cat",
+        remote_path,
     ]
     try:
         result = proc.run(argv, timeout=10.0, capture=True)
@@ -203,9 +220,7 @@ def run(
             # Origin unreachable: ask for confirmation.
             logger.warning("claim: origin {} unreachable", current_owner)
             try:
-                answer = input(
-                    f"Origin {current_owner} unreachable. Force claim? [y/N] "
-                )
+                answer = input(f"Origin {current_owner} unreachable. Force claim? [y/N] ")
             except EOFError:
                 answer = "n"
             if answer.strip().lower() != "y":
@@ -231,7 +246,11 @@ def run(
                     encoded = encode_cwd(target_cwd)
                     cwd_normalized = normalize_cwd(target_cwd, home)
                 else:
-                    encoded = encode_cwd(home / cwd_normalized.replace("~/", "")) if cwd_normalized.startswith("~/") else encode_cwd(Path(cwd_normalized))
+                    encoded = (
+                        encode_cwd(home / cwd_normalized.replace("~/", ""))
+                        if cwd_normalized.startswith("~/")
+                        else encode_cwd(Path(cwd_normalized))
+                    )
                 dst_dir = home / ".claude" / "projects" / encoded
                 dst_dir.mkdir(parents=True, exist_ok=True)
                 dst_path = dst_dir / f"{sid}.jsonl"
@@ -240,7 +259,9 @@ def run(
     elif jsonl_path is None:
         # Forced claim or local mode: JSONL must already exist locally (syncthing mirror).
         # If not, we still proceed with the claim but log a warning.
-        logger.warning("claim: JSONL for sid={} not found locally; claim proceeds without transcript", sid)
+        logger.warning(
+            "claim: JSONL for sid={} not found locally; claim proceeds without transcript", sid
+        )
 
     # S4: Write claim assertion.
     claim_assertion = Assertion(

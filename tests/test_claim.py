@@ -57,7 +57,13 @@ class TestClaimSelfOwned:
         )
         write_assertions_file(state_root, "stormtree", {sid: assertion})
 
-        rc = run(sid, state_root=state_root, hostname="stormtree", home=home, config_path=home / ".config" / "croam" / "config.toml")
+        rc = run(
+            sid,
+            state_root=state_root,
+            hostname="stormtree",
+            home=home,
+            config_path=home / ".config" / "croam" / "config.toml",
+        )
         assert rc == 0
 
 
@@ -65,7 +71,7 @@ class TestClaimLocalVerify:
     """claim_verify=local: skip SSH pre-check, use syncthing mirror."""
 
     def test_claim_from_peer_local_verify(
-        self, home: Path, state_root: Path, _config_local_only: Path, ssh_shim: object
+        self, home: Path, state_root: Path, _config_local_only: Path, ssh_shim
     ) -> None:
         """Claim with local verify copies JSONL from syncthing mirror."""
         from croam.commands.claim import run
@@ -105,7 +111,7 @@ class TestClaimSshStrict:
     """S2/S3: ssh-strict verification and cooperative release."""
 
     def test_claim_ssh_strict_cooperative(
-        self, home: Path, state_root: Path, _config_file: Path, ssh_shim: object
+        self, home: Path, state_root: Path, _config_file: Path, ssh_shim
     ) -> None:
         """Claim with ssh-strict: probe owner, release on origin, copy JSONL."""
         from croam.commands.claim import run
@@ -126,26 +132,32 @@ class TestClaimSshStrict:
         # 1. Reachability probe (ssh vicar true)
         ssh_shim.register("vicar", ["true"], exit_code=0)
         # 2. emit-state fetch for ssh-strict pre-verify
-        emit_payload = json.dumps({
-            "hostname": "vicar",
-            "ownership": {
-                sid: {
-                    "owner": "vicar",
-                    "asserted_at": assertion.asserted_at.isoformat(),
-                    "action": "create",
-                    "cwd_normalized": "~/projects/remote",
-                    "previous_owner": None,
-                }
-            },
-            "lineage": None,
-            "host_cache": None,
-            "sessions": [],
-        })
+        emit_payload = json.dumps(
+            {
+                "hostname": "vicar",
+                "ownership": {
+                    sid: {
+                        "owner": "vicar",
+                        "asserted_at": assertion.asserted_at.isoformat(),
+                        "action": "create",
+                        "cwd_normalized": "~/projects/remote",
+                        "previous_owner": None,
+                    }
+                },
+                "lineage": None,
+                "host_cache": None,
+                "sessions": [],
+            }
+        )
         ssh_shim.register("vicar", ["croam", "emit-state", "--json"], stdout=emit_payload)
         # 3. Release on origin
         ssh_shim.register("vicar", ["croam", "release", sid], exit_code=0)
         # 4. JSONL fetch (cat over SSH)
-        ssh_shim.register("vicar", ["cat", f".claude/projects/{jsonl_path.parent.name}/{sid}.jsonl"], stdout=jsonl_content)
+        ssh_shim.register(
+            "vicar",
+            ["cat", f".claude/projects/{jsonl_path.parent.name}/{sid}.jsonl"],
+            stdout=jsonl_content,
+        )
 
         rc = run(
             sid,
@@ -163,7 +175,7 @@ class TestClaimSshStrict:
         assert assertions[sid].previous_owner == "vicar"
 
     def test_claim_ssh_strict_cooperative_remote_fetch(
-        self, home: Path, state_root: Path, _config_file: Path, ssh_shim: object
+        self, home: Path, state_root: Path, _config_file: Path, ssh_shim
     ) -> None:
         """Claim when JSONL not local: fetches from remote."""
         from croam.commands.claim import run
@@ -176,7 +188,13 @@ class TestClaimSshStrict:
         encoded = encode_cwd(cwd)
 
         # Create JSONL content but DON'T put it locally
-        jsonl_content = '{"type":"last-prompt","sessionId":"' + sid + '"}\n{"type":"permission-mode","permissionMode":"default","sessionId":"' + sid + '"}\n'
+        jsonl_content = (
+            '{"type":"last-prompt","sessionId":"'
+            + sid
+            + '"}\n{"type":"permission-mode","permissionMode":"default","sessionId":"'
+            + sid
+            + '"}\n'
+        )
 
         assertion = build_assertion(
             sid, "vicar", datetime.now(UTC), cwd_normalized="~/projects/remotefetch"
@@ -185,24 +203,28 @@ class TestClaimSshStrict:
 
         # Register SSH responses
         ssh_shim.register("vicar", ["true"], exit_code=0)
-        emit_payload = json.dumps({
-            "hostname": "vicar",
-            "ownership": {
-                sid: {
-                    "owner": "vicar",
-                    "asserted_at": assertion.asserted_at.isoformat(),
-                    "action": "create",
-                    "cwd_normalized": "~/projects/remotefetch",
-                    "previous_owner": None,
-                }
-            },
-            "lineage": None,
-            "host_cache": None,
-            "sessions": [],
-        })
+        emit_payload = json.dumps(
+            {
+                "hostname": "vicar",
+                "ownership": {
+                    sid: {
+                        "owner": "vicar",
+                        "asserted_at": assertion.asserted_at.isoformat(),
+                        "action": "create",
+                        "cwd_normalized": "~/projects/remotefetch",
+                        "previous_owner": None,
+                    }
+                },
+                "lineage": None,
+                "host_cache": None,
+                "sessions": [],
+            }
+        )
         ssh_shim.register("vicar", ["croam", "emit-state", "--json"], stdout=emit_payload)
         ssh_shim.register("vicar", ["croam", "release", sid], exit_code=0)
-        ssh_shim.register("vicar", ["cat", f".claude/projects/{encoded}/{sid}.jsonl"], stdout=jsonl_content)
+        ssh_shim.register(
+            "vicar", ["cat", f".claude/projects/{encoded}/{sid}.jsonl"], stdout=jsonl_content
+        )
 
         rc = run(
             sid,
@@ -223,7 +245,7 @@ class TestClaimSshStrict:
         assert local_jsonl.exists()
 
     def test_claim_ssh_strict_conflict_warning(
-        self, home: Path, state_root: Path, _config_file: Path, ssh_shim: object
+        self, home: Path, state_root: Path, _config_file: Path, ssh_shim
     ) -> None:
         """Claim proceeds despite conflict warning when remote disagrees on owner."""
         from croam.commands.claim import run
@@ -241,21 +263,23 @@ class TestClaimSshStrict:
 
         ssh_shim.register("vicar", ["true"], exit_code=0)
         # Remote says owner is corpsefire (conflict)
-        emit_payload = json.dumps({
-            "hostname": "vicar",
-            "ownership": {
-                sid: {
-                    "owner": "corpsefire",
-                    "asserted_at": assertion.asserted_at.isoformat(),
-                    "action": "claim",
-                    "cwd_normalized": "~/projects/conflict",
-                    "previous_owner": "vicar",
-                }
-            },
-            "lineage": None,
-            "host_cache": None,
-            "sessions": [],
-        })
+        emit_payload = json.dumps(
+            {
+                "hostname": "vicar",
+                "ownership": {
+                    sid: {
+                        "owner": "corpsefire",
+                        "asserted_at": assertion.asserted_at.isoformat(),
+                        "action": "claim",
+                        "cwd_normalized": "~/projects/conflict",
+                        "previous_owner": "vicar",
+                    }
+                },
+                "lineage": None,
+                "host_cache": None,
+                "sessions": [],
+            }
+        )
         ssh_shim.register("vicar", ["croam", "emit-state", "--json"], stdout=emit_payload)
         ssh_shim.register("vicar", ["croam", "release", sid], exit_code=0)
 
@@ -272,7 +296,12 @@ class TestClaimSshStrict:
         assert sid in assertions
 
     def test_claim_ssh_strict_unreachable_forced(
-        self, home: Path, state_root: Path, _config_file: Path, ssh_shim: object, monkeypatch: pytest.MonkeyPatch
+        self,
+        home: Path,
+        state_root: Path,
+        _config_file: Path,
+        ssh_shim,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Claim when origin unreachable: forced claim with user confirmation."""
         from croam.commands.claim import run
@@ -308,7 +337,12 @@ class TestClaimSshStrict:
         assert assertions[sid].action == "claim"
 
     def test_claim_ssh_strict_unreachable_refused(
-        self, home: Path, state_root: Path, _config_file: Path, ssh_shim: object, monkeypatch: pytest.MonkeyPatch
+        self,
+        home: Path,
+        state_root: Path,
+        _config_file: Path,
+        ssh_shim,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Claim when origin unreachable: user refuses forced claim."""
         from croam.commands.claim import run
@@ -343,7 +377,7 @@ class TestClaimSnapshot:
     """S6: claim writes snapshot."""
 
     def test_claim_writes_snapshot(
-        self, home: Path, state_root: Path, _config_local_only: Path, ssh_shim: object
+        self, home: Path, state_root: Path, _config_local_only: Path, ssh_shim
     ) -> None:
         """After claim, snapshot should record the JSONL line count."""
         from croam.commands.claim import run
@@ -377,7 +411,12 @@ class TestClaimHere:
     """S5: --here rewrite."""
 
     def test_claim_here_moves_jsonl(
-        self, home: Path, state_root: Path, _config_local_only: Path, ssh_shim: object, monkeypatch: pytest.MonkeyPatch
+        self,
+        home: Path,
+        state_root: Path,
+        _config_local_only: Path,
+        ssh_shim,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Claim with --here should move JSONL to CWD's encoded path."""
         from croam.commands.claim import run
@@ -428,7 +467,7 @@ class TestClaimMissingJsonl:
     """Claim proceeds even without local JSONL (with warning)."""
 
     def test_claim_without_jsonl_succeeds(
-        self, home: Path, state_root: Path, _config_local_only: Path, ssh_shim: object
+        self, home: Path, state_root: Path, _config_local_only: Path, ssh_shim
     ) -> None:
         """Claim for a session with no local JSONL still writes assertion."""
         from croam.commands.claim import run
@@ -436,9 +475,7 @@ class TestClaimMissingJsonl:
 
         sid = str(uuid.uuid4())
         # No JSONL, just the assertion
-        assertion = build_assertion(
-            sid, "vicar", datetime.now(UTC), cwd_normalized="~/gone"
-        )
+        assertion = build_assertion(sid, "vicar", datetime.now(UTC), cwd_normalized="~/gone")
         write_assertions_file(state_root, "vicar", {sid: assertion})
 
         rc = run(
@@ -459,7 +496,12 @@ class TestClaimEofRefused:
     """EOFError on input() defaults to refusing forced claim."""
 
     def test_eof_on_input_returns_1(
-        self, home: Path, state_root: Path, _config_file: Path, ssh_shim: object, monkeypatch: pytest.MonkeyPatch
+        self,
+        home: Path,
+        state_root: Path,
+        _config_file: Path,
+        ssh_shim,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """EOFError from input() should default to refusing."""
         from croam.commands.claim import run
@@ -524,9 +566,7 @@ class TestClaimHelpers:
 class TestClaimSessionNotFound:
     """Claim for unknown sid raises SessionNotFound."""
 
-    def test_unknown_sid_raises(
-        self, home: Path, state_root: Path, _config_file: Path
-    ) -> None:
+    def test_unknown_sid_raises(self, home: Path, state_root: Path, _config_file: Path) -> None:
         from croam.commands.claim import run
         from croam.errors import SessionNotFound
 

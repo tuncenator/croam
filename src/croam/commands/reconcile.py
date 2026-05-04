@@ -109,7 +109,10 @@ def reconcile_one(
     new_lines = current_lc - (snapshot_lc or 0)
     logger.info(
         "reconcile: sid={} has {} new lines since claim (current={}, snapshot={})",
-        sid, new_lines, current_lc, snapshot_lc,
+        sid,
+        new_lines,
+        current_lc,
+        snapshot_lc,
     )
 
     try:

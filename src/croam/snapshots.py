@@ -35,9 +35,7 @@ def read_snapshots(state_root: Path, hostname: str) -> dict[str, int]:
     except json.JSONDecodeError as e:
         raise OwnershipConflict(f"Malformed JSON in {path}: {e}") from e
     if not isinstance(payload, dict):
-        raise OwnershipConflict(
-            f"Expected object in {path}, got {type(payload).__name__}"
-        )
+        raise OwnershipConflict(f"Expected object in {path}, got {type(payload).__name__}")
     result: dict[str, int] = {}
     for sid, entry in payload.items():
         if isinstance(entry, dict):
@@ -63,7 +61,9 @@ def write_snapshot(state_root: Path, hostname: str, sid: str, line_count: int) -
     # Serialize as {"sid": {"line_count": N}} for future extensibility.
     payload = {s: {"line_count": lc} for s, lc in sorted(existing.items())}
     _atomic_write_json(path, payload)
-    logger.debug("snapshots.write_snapshot: hostname={} sid={} line_count={}", hostname, sid, line_count)
+    logger.debug(
+        "snapshots.write_snapshot: hostname={} sid={} line_count={}", hostname, sid, line_count
+    )
 
 
 def get_snapshot_line_count(state_root: Path, hostname: str, sid: str) -> int | None:

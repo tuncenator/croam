@@ -194,7 +194,12 @@ def cmd_launch(ctx: typer.Context) -> None:
 @app.command("doctor")
 def cmd_doctor(ctx: typer.Context) -> None:
     """Diagnose config, SSH, syncthing, ownership consistency."""
-    raise NotImplementedError("Phase 9")
+    from croam.doctor import run_doctor
+
+    home = Path.home()
+    config_path = home / ".config" / "croam" / "config.toml"
+    exit_code = run_doctor(config_path, home)
+    raise typer.Exit(code=exit_code)
 
 
 @app.command("emit-state", hidden=True)
