@@ -26,7 +26,7 @@ class PickerRow:
     """One row in the fzf picker. Column ordering is the wire-format contract."""
 
     sid: str  # column 1 (hidden filter)
-    glyph: str  # column 2 (displayed) -- "o" reachable, "O" unreachable, "?" unknown
+    glyph: str  # column 2 (displayed) -- "●" reachable, "○" unreachable, "?" unknown
     status_word: str  # column 3 (hidden filter)
     reach_word: str  # column 4 (hidden filter)
     cwd_word: str  # column 5 (hidden filter)
@@ -61,10 +61,31 @@ def format_last_column(updated_at_ms: int | None, now: datetime) -> str:
 
 
 def compute_glyph(host_status: HostStatus | None) -> str:
-    """Return 'o' if reachable, 'O' if unreachable, '?' if unknown."""
+    """Return filled circle if reachable, open circle if unreachable, '?' if unknown."""
     if host_status is None:
         return "?"
-    return "o" if host_status.reachable else "O"
+    return "●" if host_status.reachable else "○"
+
+
+# ANSI color codes per status_word.
+_STATUS_ANSI: dict[str, str] = {
+    "running-idle": "\033[32m",   # green
+    "running-busy": "\033[33m",   # yellow
+    "archived": "\033[90m",       # gray (bright black)
+    "unreachable": "\033[2m",     # dim
+}
+_ANSI_RESET = "\033[0m"
+
+
+def colorize_glyph(glyph: str, status_word: str) -> str:
+    """Wrap glyph in ANSI escape codes based on status_word.
+
+    Returns the glyph unchanged for unknown status words.
+    """
+    code = _STATUS_ANSI.get(status_word)
+    if code is None:
+        return glyph
+    return f"{code}{glyph}{_ANSI_RESET}"
 
 
 def compute_status_word(session: ClaudeSession, host_status: HostStatus | None) -> str:
@@ -113,6 +134,7 @@ def render_rows(
         hs = host_statuses.get(owner)
         glyph = compute_glyph(hs)
         status_word = compute_status_word(session, hs)
+        glyph = colorize_glyph(glyph, status_word)
         reach_word = "reachable" if (hs is not None and hs.reachable) else "unreachable"
 
         # Resolve cwd presence on local fs.
