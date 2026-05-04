@@ -63,6 +63,17 @@ No criteria were deferred in the phase summary. All verification was done locall
 
 ---
 
+## Code Review Results
+
+**Result**: PASSED
+
+No blocking issues. Two informational notes:
+
+1. `_extract_text` is a private function imported cross-module (`transcript.py` -> `picker.py`). Now part of the cross-module contract despite underscore prefix. Worth noting if `transcript.py` is refactored.
+2. `extract_first_user_message` uses `read_text + splitlines` (whole file in memory). For large transcripts, line-by-line read would be more efficient. Acceptable at current scale.
+
+---
+
 ## Smoke Probe
 
 Pending deploy-verify. No smoke harness configured for this feature.
