@@ -175,7 +175,10 @@ def cmd_release(
     )
 
 
-@app.command("launch")
+@app.command(
+    "launch",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+)
 def cmd_launch(ctx: typer.Context) -> None:
     """Wrap a claude invocation inside tmux (the shim entry point)."""
     from croam.commands import launch as launch_mod
@@ -184,7 +187,7 @@ def cmd_launch(ctx: typer.Context) -> None:
     config = load_config()
     raise typer.Exit(
         launch_mod.launch_cmd(
-            argv=["claude"],
+            argv=["claude", *ctx.args],
             config=config,
             home=Path.home(),
         )
