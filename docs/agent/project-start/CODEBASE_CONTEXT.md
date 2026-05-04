@@ -3,7 +3,7 @@
 > **Living document** -- each phase updates this with new discoveries and changes.
 > Read this before exploring the codebase. It may already have what you need.
 >
-> Last updated by: Checkpoint 7 - Phase 10 integration tests (2026-05-04)
+> Last updated by: Checkpoint 8 - Phase 11 polish, install, README (2026-05-04)
 
 ---
 
@@ -96,6 +96,10 @@ The full design lives at `docs/specs/2026-04-30-croam-design.md`. Phase 1 establ
 | `tests/integration/test_two_host_offline.py` | Forced claim with unreachable origin + local-verify mode (4 tests) | Phase 10. |
 | `tests/integration/test_doctor_full.py` | Doctor full run: clean, conflict, missing config, unreachable peer (5 tests) | Phase 10. |
 | `tests/integration/test_e2e_dummy_attach.py` | Tier 2: attach --no-exec against real dummy (2 tests, skipped without CROAM_E2E) | Phase 10. |
+| `README.md` | Project README: description, install, first-run, verbs, config, shim, cctakeover, tests, license | Phase 11. |
+| `scripts/install-shim.sh` | Renames `claude` to `claude-real`, writes croam wrapper. Supports --self-check, --uninstall, --help. Mode 0755. | Phase 11. |
+| `scripts/install-cctakeover-alias.sh` | Appends `alias cctakeover='croam'` to shell rc file. Supports --uninstall, --help. Mode 0755. | Phase 11. |
+| `tests/test_install_scripts.py` | 12 tests for install-shim.sh and install-cctakeover-alias.sh (subprocess against synthetic HOME) | Phase 11. |
 
 ---
 
