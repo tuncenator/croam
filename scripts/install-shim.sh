@@ -37,13 +37,31 @@ find_claude_real() {
 }
 
 self_check() {
-    local found
-    found=$(find_claude)
-    if [ -z "$found" ]; then
-        echo "ERROR: 'claude' not found on PATH" >&2
+    local failures=0
+
+    # Check claude on PATH.
+    local claude_path
+    claude_path=$(find_claude)
+    if [ -z "$claude_path" ]; then
+        echo "[FAIL] claude not found on PATH"
+        failures=$((failures + 1))
+    else
+        echo "[OK] claude on PATH ($claude_path)"
+    fi
+
+    # Check croam on PATH.
+    local croam_path
+    croam_path=$(command -v croam 2>/dev/null || true)
+    if [ -z "$croam_path" ]; then
+        echo "[FAIL] croam not found on PATH"
+        failures=$((failures + 1))
+    else
+        echo "[OK] croam on PATH ($croam_path)"
+    fi
+
+    if [ "$failures" -gt 0 ]; then
         exit 1
     fi
-    echo "OK: found claude at $found"
     exit 0
 }
 

@@ -68,24 +68,35 @@ def make_env(home: Path, bin_dir: Path | None = None, shell: str = "/bin/bash") 
 
 class TestInstallShim:
     def test_self_check_passes_when_prereqs_met(self, home: Path, tmp_path: Path) -> None:
-        """--self-check exits 0 when claude is on PATH."""
+        """--self-check exits 0 when claude and croam are on PATH."""
         bin_dir = tmp_path / "bin"
         bin_dir.mkdir()
         make_fake_claude(bin_dir)
+        # Also need a fake croam for the self-check to pass.
+        fake_croam = bin_dir / "croam"
+        fake_croam.write_text("#!/usr/bin/env bash\necho 'fake croam'\n")
+        fake_croam.chmod(0o755)
 
         env = make_env(home, bin_dir)
         result = run_script(INSTALL_SHIM, ["--self-check"], env)
         assert result.returncode == 0, f"stdout={result.stdout!r} stderr={result.stderr!r}"
+        assert "[OK] claude on PATH" in result.stdout
+        assert "[OK] croam on PATH" in result.stdout
 
     def test_self_check_fails_when_claude_missing(self, home: Path, tmp_path: Path) -> None:
-        """--self-check exits non-zero when claude is not on PATH."""
+        """--self-check exits 1 when claude is not on PATH."""
         bin_dir = tmp_path / "bin"
         bin_dir.mkdir()
-        # deliberately do NOT create fake claude
+        # deliberately do NOT create fake claude; add croam so only claude fails.
+        fake_croam = bin_dir / "croam"
+        fake_croam.write_text("#!/usr/bin/env bash\necho 'fake croam'\n")
+        fake_croam.chmod(0o755)
 
         env = make_env(home, bin_dir)
         result = run_script(INSTALL_SHIM, ["--self-check"], env)
-        assert result.returncode != 0, "expected failure when claude is missing"
+        assert result.returncode == 1, "expected exit 1 when claude is missing"
+        assert "[FAIL]" in result.stdout
+        assert "claude" in result.stdout
 
     def test_installs_shim(self, home: Path, tmp_path: Path) -> None:
         """install-shim.sh renames claude to claude-real and creates a wrapper."""

@@ -184,4 +184,5 @@ uv run pyright src
 
 ## License
 
-MIT. See source headers.
+License pending. The codebase is currently for private use by the author and
+not yet released under any public license.
