@@ -7,3 +7,6 @@ dist/
 logs/helpers/
 croam.log
 *.pyc
+
+# Spark phase worktrees (created by /spark-conductor)
+.worktrees/

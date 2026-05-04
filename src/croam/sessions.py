@@ -74,7 +74,7 @@ def discover_local_sessions(home: Path) -> list[ClaudeSession]:
         try:
             cwd = decode_cwd(subdir.name, host_home=home)
         except (OSError, ValueError, Exception) as e:
-            logger.warning("Could not decode cwd for {}; skipping: {}", subdir.name, e)
+            logger.debug("Could not decode cwd for {}; skipping: {}", subdir.name, e)
             continue
 
         for jsonl_path in subdir.glob("*.jsonl"):

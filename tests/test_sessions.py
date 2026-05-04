@@ -418,7 +418,7 @@ def test_discover_non_dir_subdir_skipped(home: Path) -> None:
 
 
 def test_discover_decode_cwd_error_skips_subdir(home: Path) -> None:
-    """decode_cwd raising ConfigError on invalid subdir name -> WARNING logged, subdir skipped."""
+    """decode_cwd raising ConfigError on invalid subdir name -> DEBUG logged, subdir skipped."""
     from loguru import logger
 
     projects_dir = home / ".claude" / "projects"
@@ -428,8 +428,8 @@ def test_discover_decode_cwd_error_skips_subdir(home: Path) -> None:
     sid = _make_sid()
     (bad_subdir / f"{sid}.jsonl").write_text("")
 
-    warnings: list[str] = []
-    sink_id = logger.add(lambda msg: warnings.append(msg), level="WARNING")
+    messages: list[str] = []
+    sink_id = logger.add(lambda msg: messages.append(msg), level="DEBUG")
     try:
         result = discover_local_sessions(home)
     finally:
@@ -437,7 +437,7 @@ def test_discover_decode_cwd_error_skips_subdir(home: Path) -> None:
 
     # The bad subdir was skipped; no ClaudeSession from it
     assert result == []
-    assert any("INVALID_NO_LEADING_DASH" in w or "Could not decode" in w for w in warnings)
+    assert any("INVALID_NO_LEADING_DASH" in m or "Could not decode" in m for m in messages)
 
 
 def test_tmux_attached_list_sessions_fails(home: Path, tmux_socket: Path) -> None:
