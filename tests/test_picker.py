@@ -2,6 +2,7 @@
 
 Phase 6: 9 tests covering pure formatters, render_rows, fzf argv construction,
 launch_picker happy/cancel/no-match/error paths, and compute_action_intersection.
+Phase 1 additions: Unicode glyphs, colorize_glyph, ANSI passthrough.
 """
 
 from __future__ import annotations
@@ -12,10 +13,13 @@ from pathlib import Path
 import pytest
 
 from croam.errors import CroamError
+from croam.hosts import HostStatus
 from croam.picker import (
     PickerRow,
     build_fzf_argv,
+    colorize_glyph,
     compute_action_intersection,
+    compute_glyph,
     format_input_lines,
     format_last_column,
     launch_picker,
@@ -23,6 +27,82 @@ from croam.picker import (
 from tests._helpers.fake_fzf import make_fake_fzf
 
 NOW = datetime(2026, 4, 30, 12, 0, 0, tzinfo=UTC)
+
+_HS_REACHABLE = HostStatus(name="h", reachable=True, last_probed=NOW, error=None)
+_HS_UNREACHABLE = HostStatus(name="h", reachable=False, last_probed=NOW, error=None)
+
+
+# ---------------------------------------------------------------------------
+# Phase 1: compute_glyph Unicode circles
+# ---------------------------------------------------------------------------
+
+
+def test_compute_glyph_reachable_returns_filled_circle(home):
+    assert "●" in compute_glyph(_HS_REACHABLE)
+
+
+def test_compute_glyph_unreachable_returns_open_circle(home):
+    assert "○" in compute_glyph(_HS_UNREACHABLE)
+
+
+def test_compute_glyph_none_returns_question_mark(home):
+    assert compute_glyph(None) == "?"
+
+
+# ---------------------------------------------------------------------------
+# Phase 1: colorize_glyph ANSI color wrapping
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "status_word,expected_code",
+    [
+        ("running-idle", "\033[32m"),
+        ("running-busy", "\033[33m"),
+        ("archived", "\033[90m"),
+        ("unreachable", "\033[2m"),
+    ],
+)
+def test_colorize_glyph_uses_correct_ansi_code(home, status_word, expected_code):
+    result = colorize_glyph("●", status_word)
+    assert result.startswith(expected_code)
+    assert result.endswith("\033[0m")
+    assert "●" in result
+
+
+def test_colorize_glyph_running_idle_exact(home):
+    assert colorize_glyph("●", "running-idle") == "\033[32m●\033[0m"
+
+
+def test_colorize_glyph_unreachable_open_circle_exact(home):
+    assert colorize_glyph("○", "unreachable") == "\033[2m○\033[0m"
+
+
+def test_colorize_glyph_unknown_status_returns_glyph_unchanged(home):
+    # Unknown status_word: no ANSI wrapping, return glyph as-is.
+    assert colorize_glyph("?", "unknown-status") == "?"
+
+
+# ---------------------------------------------------------------------------
+# Phase 1: format_input_lines preserves ANSI codes
+# ---------------------------------------------------------------------------
+
+
+def test_format_input_lines_preserves_ansi_codes(home):
+    ansi_glyph = "\033[32m●\033[0m"
+    row = PickerRow(
+        sid="ansi-sid",
+        glyph=ansi_glyph,
+        status_word="running-idle",
+        reach_word="reachable",
+        cwd_word="present",
+        host="h",
+        last="2m",
+        cwd_display="~",
+        name="ansi-test",
+    )
+    out = format_input_lines([row])
+    assert "\033[32m●\033[0m" in out
 
 
 @pytest.mark.parametrize(
@@ -50,10 +130,12 @@ def test_format_last_column(home, ms_ago, expected):
 
 
 def test_format_input_lines_exact_shape(home):
+    green_filled = "\033[32m●\033[0m"
+    dim_open = "\033[2m○\033[0m"
     rows = [
         PickerRow(
             sid="abc12345-aaaa-bbbb-cccc-111111111111",
-            glyph="o",
+            glyph=green_filled,
             status_word="running-idle",
             reach_word="reachable",
             cwd_word="present",
@@ -64,7 +146,7 @@ def test_format_input_lines_exact_shape(home):
         ),
         PickerRow(
             sid="def45678-2222-3333-4444-555555555555",
-            glyph="O",
+            glyph=dim_open,
             status_word="unreachable",
             reach_word="unreachable",
             cwd_word="missing-cwd",
@@ -76,20 +158,23 @@ def test_format_input_lines_exact_shape(home):
     ]
     out = format_input_lines(rows)
     expected = (
-        "abc12345-aaaa-bbbb-cccc-111111111111\to\trunning-idle\t"
+        f"abc12345-aaaa-bbbb-cccc-111111111111\t{green_filled}\trunning-idle\t"
         "reachable\tpresent\tstormtree\t2m\t~/Programs/onlayer-x\t"
         "iso27001 controls draft\n"
-        "def45678-2222-3333-4444-555555555555\tO\tunreachable\t"
+        f"def45678-2222-3333-4444-555555555555\t{dim_open}\tunreachable\t"
         "unreachable\tmissing-cwd\tvicar\t1d\t/home/work/onlayer-eu\t"
         "refactor mart_*\n"
     )
     assert out == expected
+    # Verify ANSI codes are present in the output.
+    assert "\033[32m" in out
+    assert "\033[2m" in out
 
 
 def test_format_input_lines_scrubs_tabs_and_newlines(home):
     row = PickerRow(
         sid="x",
-        glyph="o",
+        glyph="●",
         status_word="running-idle",
         reach_word="reachable",
         cwd_word="present",
@@ -114,7 +199,6 @@ def test_render_rows_with_lineage(home):
     pytest.importorskip("croam.sessions")
     pytest.importorskip("croam.ownership")
 
-    from croam.hosts import HostStatus
     from croam.ownership import Assertion
     from croam.picker import render_rows
     from croam.sessions import ClaudeSession
@@ -166,7 +250,6 @@ def test_render_rows_missing_cwd(home):
     """A session whose cwd doesn't exist locally has cwd_word == 'missing-cwd'."""
     pytest.importorskip("croam.sessions")
 
-    from croam.hosts import HostStatus
     from croam.ownership import Assertion
     from croam.picker import render_rows
     from croam.sessions import ClaudeSession
@@ -213,7 +296,7 @@ def test_compute_action_intersection_excludes_claim_and_fork_when_unreachable_or
     """Per spec section 4: mixed selection drops claim/fork."""
     row_local = PickerRow(
         sid="a",
-        glyph="o",
+        glyph="●",
         status_word="running-idle",
         reach_word="reachable",
         cwd_word="present",
@@ -224,7 +307,7 @@ def test_compute_action_intersection_excludes_claim_and_fork_when_unreachable_or
     )
     row_remote_unreachable = PickerRow(
         sid="b",
-        glyph="O",
+        glyph="○",
         status_word="unreachable",
         reach_word="unreachable",
         cwd_word="missing-cwd",
@@ -272,7 +355,7 @@ def test_launch_picker_happy_path_keyfile(home, tmp_path, monkeypatch):
     rows = [
         PickerRow(
             sid="row1-sid",
-            glyph="o",
+            glyph="●",
             status_word="running-idle",
             reach_word="reachable",
             cwd_word="present",
@@ -283,7 +366,7 @@ def test_launch_picker_happy_path_keyfile(home, tmp_path, monkeypatch):
         ),
         PickerRow(
             sid="row2-sid",
-            glyph="o",
+            glyph="●",
             status_word="running-idle",
             reach_word="reachable",
             cwd_word="present",
@@ -297,8 +380,8 @@ def test_launch_picker_happy_path_keyfile(home, tmp_path, monkeypatch):
         tmp_path,
         output=(
             "\n"
-            "row1-sid\to\trunning-idle\treachable\tpresent\th\t-\t~\tr1\n"
-            "row2-sid\to\trunning-idle\treachable\tpresent\th\t-\t~\tr2\n"
+            "row1-sid\t●\trunning-idle\treachable\tpresent\th\t-\t~\tr1\n"
+            "row2-sid\t●\trunning-idle\treachable\tpresent\th\t-\t~\tr2\n"
         ),
         exit_code=0,
         write_keyfile="p",
@@ -315,7 +398,7 @@ def test_launch_picker_happy_path_expect(home, tmp_path, monkeypatch):
     rows = [
         PickerRow(
             sid="row1-sid",
-            glyph="o",
+            glyph="●",
             status_word="running-idle",
             reach_word="reachable",
             cwd_word="present",
@@ -329,7 +412,7 @@ def test_launch_picker_happy_path_expect(home, tmp_path, monkeypatch):
         tmp_path,
         output=(
             "ctrl-r\n"
-            "row1-sid\to\trunning-idle\treachable\tpresent\th\t-\t~\tr1\n"
+            "row1-sid\t●\trunning-idle\treachable\tpresent\th\t-\t~\tr1\n"
         ),
         exit_code=0,
     )
@@ -343,7 +426,7 @@ def test_launch_picker_cancel(home, tmp_path, monkeypatch):
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     dummy_row = PickerRow(
         sid="cancel-sid",
-        glyph="o",
+        glyph="●",
         status_word="archived",
         reach_word="reachable",
         cwd_word="present",
@@ -363,7 +446,7 @@ def test_launch_picker_no_match(home, tmp_path, monkeypatch):
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     dummy_row = PickerRow(
         sid="nomatch-sid",
-        glyph="o",
+        glyph="●",
         status_word="archived",
         reach_word="reachable",
         cwd_word="present",
@@ -383,7 +466,7 @@ def test_launch_picker_error(home, tmp_path, monkeypatch):
     fake = make_fake_fzf(tmp_path, output="", exit_code=2)
     dummy_row = PickerRow(
         sid="x",
-        glyph="o",
+        glyph="●",
         status_word="archived",
         reach_word="reachable",
         cwd_word="present",
