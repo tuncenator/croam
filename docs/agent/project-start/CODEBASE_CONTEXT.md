@@ -3,7 +3,7 @@
 > **Living document** -- each phase updates this with new discoveries and changes.
 > Read this before exploring the codebase. It may already have what you need.
 >
-> Last updated by: Checkpoint 6 - Phases 8, 9 merged (2026-05-04)
+> Last updated by: Checkpoint 7 - Phase 10 integration tests (2026-05-04)
 
 ---
 
@@ -89,6 +89,13 @@ The full design lives at `docs/specs/2026-04-30-croam-design.md`. Phase 1 establ
 | `tests/test_sync.py` | 24 tests for syncthing mirror read helpers | Phase 9. |
 | `tests/test_doctor.py` | 17 tests for doctor diagnostics | Phase 9 (checkpoint 6). |
 | `tests/fixtures/` | Synthetic session JSONLs, ownership.json snapshots, sample TOML configs | Created across Phase 4, 7. |
+| `tests/integration/__init__.py` | Integration tests package marker | Phase 10. |
+| `tests/integration/conftest.py` | `TwoHostEnv` fixture: HostEnv dataclasses, TwoHostSshRegistry, shared state_root | Phase 10. |
+| `tests/integration/test_two_host_picker.py` | Picker round-trip with merged two-host assertions (5 tests) | Phase 10. |
+| `tests/integration/test_two_host_claim.py` | Claim handshake end-to-end: cooperative + ssh-strict + snapshot (4 tests) | Phase 10. |
+| `tests/integration/test_two_host_offline.py` | Forced claim with unreachable origin + local-verify mode (4 tests) | Phase 10. |
+| `tests/integration/test_doctor_full.py` | Doctor full run: clean, conflict, missing config, unreachable peer (5 tests) | Phase 10. |
+| `tests/integration/test_e2e_dummy_attach.py` | Tier 2: attach --no-exec against real dummy (2 tests, skipped without CROAM_E2E) | Phase 10. |
 
 ---
 
@@ -787,3 +794,49 @@ Two tiers, gated by `CROAM_E2E` env var:
 - **Phase 8**: ssh-strict claim verification: before writing the assertion, SSH to every reachable peer with `croam --emit-state`, merge with local view, proceed only if the merge agrees the transition is legal. Race window is the gap between "merge agrees" and "we wrote the assertion + syncthing replicated it." Acknowledged in the spec.
 - **Phase 9**: syncthing conflict file detection -- glob for `*.sync-conflict-*` under `state_root` and surface as orphans.
 - **Phase 10**: integration tests use a synthetic two-host fixture (just two `tmp_path`-rooted state_roots and an SSH shim that pretends to be the peer). Avoid spinning up real second-host VMs.
+
+---
+
+## Phase 10 Integration Test Findings
+
+### Two-host fixture pattern (for future test phases)
+
+```python
+from tests.integration.conftest import TwoHostEnv, TwoHostSshRegistry, HostEnv
+
+# TwoHostEnv provides:
+@dataclass(frozen=True)
+class HostEnv:
+    name: str          # "stormtree" or "vicar"
+    home: Path         # tmp_path/<name>/home
+    state_root: Path   # tmp_path/state (shared between hosts)
+    config_path: Path  # <home>/.config/croam/config.toml
+
+@dataclass(frozen=True)
+class TwoHostEnv:
+    stormtree: HostEnv
+    vicar: HostEnv
+    shared_state_root: Path  # tmp_path/state
+
+# Usage in tests:
+def test_example(two_host_env: TwoHostEnv, two_host_ssh: TwoHostSshRegistry):
+    two_host_ssh.register("vicar", ["true"], exit_code=0)  # reachable
+    two_host_ssh.register("vicar", ["croam", "emit-state", "--json"], stdout=json.dumps(payload))
+    # ... exercise commands against two_host_env.stormtree ...
+```
+
+### Encoded-cwd verification
+
+Not verified against real dummy (CROAM_E2E not set). Synthetic tests confirm `paths.encode_cwd` is consistent with `synth_jsonl._encode_cwd` (cross-verification in test_paths.py).
+
+### claude --resume non-interactive behavior
+
+Not empirically tested (CROAM_E2E not set; Tier 2 tests skipped). The assumed behavior (no cwd enforcement) carries forward from Phase 8's documentation.
+
+### Cwd enforcement on resume verdict
+
+Verdict unchanged from Phase 8: assumed NO enforcement. Phase 10's Tier 2 tests would confirm this empirically if CROAM_E2E=1 were set, but the default run (Tier 1) relies on the Phase 8 assumption.
+
+### Coverage summary (Phase 10)
+
+Overall coverage: 92% (2068 statements, 169 missed). All modules above 60%. Lowest: `commands/default.py` at 60% (picker dispatch orchestration, difficult to unit-test without fzf).

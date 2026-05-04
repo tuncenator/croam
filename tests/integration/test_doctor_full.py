@@ -45,11 +45,7 @@ class TestDoctorFullRun:
         monkeypatch.setattr("shutil.which", lambda t: f"/usr/bin/{t}")
         monkeypatch.setattr("croam.proc.run", _mock_proc_run)
 
-        conflict = (
-            st.state_root
-            / "vicar"
-            / "ownership.sync-conflict-20260501-120000-ABC.json"
-        )
+        conflict = st.state_root / "vicar" / "ownership.sync-conflict-20260501-120000-ABC.json"
         conflict.write_text("{}")
 
         rc = run_doctor(st.config_path, st.home)

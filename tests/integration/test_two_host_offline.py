@@ -90,9 +90,7 @@ class TestForcedClaimVicarUnreachable:
         local = read_local_assertions(st.state_root, "stormtree")
         assert sid not in local
 
-    def test_forced_claim_eof_input_refuses(
-        self, two_host_env: TwoHostEnv, two_host_ssh
-    ) -> None:
+    def test_forced_claim_eof_input_refuses(self, two_host_env: TwoHostEnv, two_host_ssh) -> None:
         """EOFError from input() (non-interactive) is treated as refusal."""
         from croam.commands.claim import run
 

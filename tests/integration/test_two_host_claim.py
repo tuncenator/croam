@@ -32,9 +32,7 @@ class TestClaimCooperative:
 
         # vicar owns the session.
         t_vicar = datetime.now(UTC) - timedelta(hours=1)
-        assertion_vc = build_assertion(
-            sid, "vicar", t_vicar, cwd_normalized="~/projects/mywork"
-        )
+        assertion_vc = build_assertion(sid, "vicar", t_vicar, cwd_normalized="~/projects/mywork")
         write_assertions_file(st.state_root, "vicar", {sid: assertion_vc})
 
         # JSONL exists locally (syncthing mirror).

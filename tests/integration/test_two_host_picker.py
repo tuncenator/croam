@@ -18,9 +18,7 @@ from tests.integration.conftest import TwoHostEnv
 class TestPickerRowRendering:
     """Picker renders combined assertions from both hosts."""
 
-    def test_rows_include_stormtree_and_vicar_sessions(
-        self, two_host_env: TwoHostEnv
-    ) -> None:
+    def test_rows_include_stormtree_and_vicar_sessions(self, two_host_env: TwoHostEnv) -> None:
         """Sessions owned by each host both appear in rendered rows."""
         from croam.ownership import merge_assertions, read_all_assertions
         from croam.picker import render_rows
@@ -114,9 +112,7 @@ class TestPickerRowRendering:
         assert by_sid[sid_st].host == "stormtree"
         assert by_sid[sid_vc].host == "vicar"
 
-    def test_format_input_lines_produces_tab_delimited_rows(
-        self, two_host_env: TwoHostEnv
-    ) -> None:
+    def test_format_input_lines_produces_tab_delimited_rows(self, two_host_env: TwoHostEnv) -> None:
         """format_input_lines output has 9 tab-separated columns per row."""
         from croam.ownership import merge_assertions, read_all_assertions
         from croam.picker import format_input_lines, render_rows
