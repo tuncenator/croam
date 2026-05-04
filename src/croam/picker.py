@@ -220,7 +220,7 @@ def build_fzf_argv(
         "--expect=p,c,f,C,F,ctrl-r",
         "--bind=tab:toggle+down",
         "--bind=shift-tab:toggle+up",
-        '--bind=select,deselect:transform-header:echo "$FZF_SELECT_COUNT/$FZF_MATCH_COUNT selected"',
+        '--bind=multi:transform-header:echo "$FZF_SELECT_COUNT/$FZF_MATCH_COUNT selected"',
         f"--header={header_default}",
         "--height=80%",
         "--layout=reverse",

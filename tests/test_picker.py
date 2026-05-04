@@ -250,7 +250,7 @@ def test_build_fzf_argv_includes_required_flags(home):
     assert "--ansi" in argv
     assert "--with-nth=2,6,7,8,9" in argv
     assert "--expect=p,c,f,C,F,ctrl-r" in argv
-    assert any("select,deselect:transform-header" in a for a in argv)
+    assert any("--bind=multi:transform-header" in a for a in argv)
     assert any(a.startswith("--query=") and "/home/tunc/Programs/croam" in a for a in argv)
 
 
