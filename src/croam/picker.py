@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -32,13 +33,111 @@ class PickerRow:
     cwd_word: str  # column 5 (hidden filter)
     host: str  # column 6 (displayed)
     last: str  # column 7 (displayed)
-    cwd_display: str  # column 8 (displayed) -- TODO(phase-11): fish-style truncation
+    cwd_display: str  # column 8 (displayed)
     name: str  # column 9 (displayed)
 
 
 # ---------------------------------------------------------------------------
 # Pure formatting helpers
 # ---------------------------------------------------------------------------
+
+
+def fish_truncate_path(path: str, home: str) -> str:
+    """Truncate a filesystem path fish-shell style.
+
+    Replaces home prefix with ~, then abbreviates each intermediate component
+    to its first character, keeping the last component in full.
+
+    Examples (home=/home/tunc):
+        /home/tunc/Programs/onlayer-x/internal/iam -> ~/P/o/i/iam
+        /home/tunc/Programs/croam                  -> ~/P/croam
+        /home/tunc                                 -> ~
+        /opt/services/myapp                        -> /o/s/myapp
+        /                                          -> /
+        /usr                                       -> /usr
+    """
+    # Normalise home: strip trailing slash.
+    home = home.rstrip("/")
+
+    # Expand leading ~ in path using the provided home.
+    if path == "~":
+        return "~"
+    if path.startswith("~/"):
+        path = home + path[1:]
+
+    # Check for exact match with home.
+    if path == home:
+        return "~"
+
+    # Check for home prefix.
+    home_prefix = home + "/"
+    if path.startswith(home_prefix):
+        rest = path[len(home_prefix):]
+        prefix = "~/"
+    elif path == "/":
+        return "/"
+    else:
+        # Absolute path with no home prefix.
+        # Strip leading slash, split, re-add root marker.
+        rest = path.lstrip("/")
+        prefix = "/"
+
+    parts = rest.split("/")
+
+    # Single component: nothing to abbreviate.
+    if len(parts) == 1:
+        return prefix + parts[0]
+
+    # Abbreviate all but the last component.
+    abbreviated: list[str] = []
+    for part in parts[:-1]:
+        if part.startswith(".") and len(part) > 1:
+            # Dotfile: keep dot + first char after dot.
+            abbreviated.append("." + part[1])
+        elif part:
+            abbreviated.append(part[0])
+        else:
+            abbreviated.append(part)
+
+    return prefix + "/".join(abbreviated) + "/" + parts[-1]
+
+
+def extract_first_user_message(jsonl_path: Path, max_chars: int = 80) -> str | None:
+    """Return the first non-empty user message text from a JSONL transcript.
+
+    Reads line by line, skipping non-user entries and empty content.
+    Truncates to max_chars characters, appending '...' if truncated.
+    Returns None if the file is missing/unreadable or has no non-empty user message.
+    """
+    # Import here to avoid circular import at module load time while keeping
+    # _extract_text reuse. The function is called at row-render time, not import time.
+    from croam.transcript import _extract_text
+
+    try:
+        lines = jsonl_path.read_text(encoding="utf-8").splitlines()
+    except OSError as e:
+        logger.debug("extract_first_user_message: cannot read {}: {}", jsonl_path, e)
+        return None
+
+    for raw_line in lines:
+        raw_line = raw_line.strip()
+        if not raw_line:
+            continue
+        try:
+            obj = json.loads(raw_line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(obj, dict) or obj.get("type") != "user":
+            continue
+        message = obj.get("message", "")
+        text = _extract_text(message).strip()
+        if not text:
+            continue
+        if len(text) > max_chars:
+            return text[:max_chars] + "..."
+        return text
+
+    return None
 
 
 def format_last_column(updated_at_ms: int | None, now: datetime) -> str:
@@ -143,10 +242,13 @@ def render_rows(
         cwd_word = "present" if cwd_path.is_dir() else "missing-cwd"
 
         last = format_last_column(session.updated_at_ms, now)
-        cwd_display = cwd_normalized if assertion else str(session.cwd)
+        raw_cwd = cwd_normalized if assertion else str(session.cwd)
+        cwd_display = fish_truncate_path(raw_cwd, str(Path.home()))
 
         # Build name with optional lineage tag.
-        base_name = session.name or session.sid[:8]
+        base_name = session.name
+        if base_name is None:
+            base_name = extract_first_user_message(session.transcript_path) or session.sid[:8]
         le = lineage.get(session.sid)
         if le is not None:
             parent_short = getattr(le, "parent_sid", "")[:6]
