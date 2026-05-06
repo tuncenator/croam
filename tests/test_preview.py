@@ -30,21 +30,21 @@ def _make_msg(role: str, text: str, idx: int = 0) -> dict:
 
 
 def test_extract_conversation_tail_happy_path_last_n(home):
-    """JSONL with 15 user+assistant messages returns last 10."""
+    """JSONL with 25 user+assistant messages returns last 20."""
     from croam.preview import extract_conversation_tail
 
     jsonl = home / "test_tail.jsonl"
     entries = []
-    for i in range(15):
+    for i in range(25):
         role = "user" if i % 2 == 0 else "assistant"
         entries.append(_make_msg(role, f"message {i}", i))
     _write_jsonl(jsonl, entries)
 
-    result = extract_conversation_tail(jsonl, n=10)
-    assert len(result) == 10
-    # Should be the last 10 messages (indices 5..14).
+    result = extract_conversation_tail(jsonl, n=20)
+    assert len(result) == 20
+    # Should be the last 20 messages (indices 5..24).
     assert result[0] == ("user", "message 5") or result[0] == ("assistant", "message 5")
-    assert result[-1][1] == "message 14"
+    assert result[-1][1] == "message 24"
 
 
 def test_extract_conversation_tail_short_transcript(home):
@@ -66,22 +66,20 @@ def test_extract_conversation_tail_short_transcript(home):
     assert result[2] == ("user", "thanks")
 
 
-def test_extract_conversation_tail_truncation(home):
-    """Messages over max_msg_chars are truncated with '...'."""
+def test_extract_conversation_tail_preserves_full_text(home):
+    """Long messages are preserved in full (formatting handles display truncation)."""
     from croam.preview import extract_conversation_tail
 
-    jsonl = home / "test_trunc.jsonl"
+    jsonl = home / "test_long.jsonl"
     long_text = "x" * 300
     entries = [_make_msg("user", long_text, 0)]
     _write_jsonl(jsonl, entries)
 
-    result = extract_conversation_tail(jsonl, n=10, max_msg_chars=200)
+    result = extract_conversation_tail(jsonl, n=20)
     assert len(result) == 1
     role, text = result[0]
     assert role == "user"
-    assert len(text) == 203  # 200 + len("...")
-    assert text.endswith("...")
-    assert text[:200] == "x" * 200
+    assert len(text) == 300
 
 
 def test_extract_conversation_tail_skips_non_user_assistant(home):
@@ -105,6 +103,26 @@ def test_extract_conversation_tail_skips_non_user_assistant(home):
     assert result[0] == ("user", "first user msg")
     assert result[1] == ("assistant", "assistant reply")
     assert result[2] == ("user", "second user msg")
+
+
+def test_extract_conversation_tail_filters_system_injected_user_messages(home):
+    """User messages starting with '<' (system-reminder injections) are skipped."""
+    from croam.preview import extract_conversation_tail
+
+    jsonl = home / "test_filter.jsonl"
+    entries = [
+        _make_msg("user", "<system-reminder>some hook context</system-reminder>", 0),
+        _make_msg("assistant", "got the context", 1),
+        _make_msg("user", "real question here", 2),
+        _make_msg("assistant", "real answer", 3),
+    ]
+    _write_jsonl(jsonl, entries)
+
+    result = extract_conversation_tail(jsonl, n=20)
+    assert len(result) == 3
+    assert result[0] == ("assistant", "got the context")
+    assert result[1] == ("user", "real question here")
+    assert result[2] == ("assistant", "real answer")
 
 
 def test_extract_conversation_tail_empty_file(home):
@@ -209,10 +227,10 @@ def test_render_preview_full(home):
     assert "Actions:" in output
     # Fish-truncated cwd: home/Programs/croam -> ~/P/croam.
     assert "~/P/croam" in output
-    # Conversation tail.
-    assert "[user] help me debug the auth flow" in output
-    assert "[assistant]" in output
-    assert "that fixed it, thanks" in output
+    # Conversation tail with >>> / indent formatting.
+    assert ">>> help me debug the auth flow" in output
+    assert "    I'll look at the authentication middleware..." in output
+    assert ">>> that fixed it, thanks" in output
 
 
 def test_render_preview_session_not_found(home):
@@ -247,6 +265,105 @@ def test_render_preview_archived_session(home):
 
     output = render_preview(sid, home)
     assert "archived" in output.lower()
+
+
+def test_format_tail_multiline_messages(home):
+    """Multi-line messages show up to 8 lines with overflow indicator."""
+    from croam.preview import _format_tail
+
+    long_msg = "\n".join(f"line {i}" for i in range(12))
+    tail = [("user", "short question"), ("assistant", long_msg)]
+    lines = _format_tail(tail)
+    text = "\n".join(lines)
+
+    assert ">>> short question" in text
+    assert "    line 0" in text
+    assert "    line 7" in text
+    assert "    ... (4 more lines)" in text
+    assert "line 8" not in text
+
+
+def test_render_preview_local_owner_no_transcript(home, monkeypatch):
+    """Local-owned session with missing transcript shows '(no transcript)', not 'not reachable'."""
+    import json
+
+    from croam.preview import render_preview
+
+    sid = "eeee5555-ffff-0000-1111-222222222222"
+    owner = "VICAR"
+    cwd = home / "Programs" / "croam"
+
+    # Ownership assertion only (no transcript JSONL).
+    state_root = home / ".local" / "share" / "croam"
+    owner_dir = state_root / owner
+    owner_dir.mkdir(parents=True, exist_ok=True)
+    ownership_file = owner_dir / "ownership.json"
+    ownership_file.write_text(json.dumps({
+        sid: {
+            "owner": owner,
+            "asserted_at": "2026-05-04T10:00:00+00:00",
+            "action": "create",
+            "cwd_normalized": str(cwd),
+            "previous_owner": None,
+        }
+    }))
+
+    # Fake config so self_hostname matches the owner.
+    from unittest.mock import MagicMock
+
+    fake_config = MagicMock()
+    fake_config.self_hostname = owner
+    fake_config.storage.state_root = state_root
+    fake_config.hosts = {}
+    monkeypatch.setattr("croam.config.load_config", lambda: fake_config)
+
+    output = render_preview(sid, home)
+    assert "(no transcript)" in output
+    assert "not reachable" not in output
+
+
+def test_render_preview_mirror_fallback(home):
+    """Remote session with no SSH falls back to syncthing mirror transcript."""
+    import json
+
+    from croam.preview import render_preview
+
+    sid = "dddd4444-eeee-ffff-0000-111111111111"
+    owner = "vicar"
+    cwd = home / "Programs" / "croam"
+
+    # Ownership assertion (no local transcript).
+    state_root = home / ".local" / "share" / "croam"
+    owner_dir = state_root / owner
+    owner_dir.mkdir(parents=True, exist_ok=True)
+    ownership_file = owner_dir / "ownership.json"
+    ownership_file.write_text(json.dumps({
+        sid: {
+            "owner": owner,
+            "asserted_at": "2026-05-04T10:00:00+00:00",
+            "action": "create",
+            "cwd_normalized": str(cwd),
+            "previous_owner": None,
+        }
+    }))
+
+    # Mirror transcript under state_root/<owner>/projects/<encoded>/<sid>.jsonl.
+    from tests._helpers.synth_jsonl import _encode_cwd
+
+    encoded = _encode_cwd(cwd)
+    mirror_dir = state_root / owner / "projects" / encoded
+    mirror_dir.mkdir(parents=True, exist_ok=True)
+    mirror_jsonl = mirror_dir / f"{sid}.jsonl"
+    entries = [
+        _make_msg("user", "mirror question", 0),
+        _make_msg("assistant", "mirror answer", 1),
+    ]
+    _write_jsonl(mirror_jsonl, entries)
+
+    output = render_preview(sid, home)
+    assert ">>> mirror question" in output
+    assert "    mirror answer" in output
+    assert "not reachable" not in output
 
 
 # ---------------------------------------------------------------------------

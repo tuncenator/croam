@@ -47,22 +47,52 @@ def should_wrap(
     return not ("--help" in argv or "-h" in argv)
 
 
+_RESUME_FLAGS = frozenset({"--resume", "-r"})
+_CONTINUE_FLAGS = frozenset({"--continue", "-c"})
+_SESSION_ID_FLAG = "--session-id"
+
+
 def derive_sid(argv: list[str], env: dict[str, str]) -> str:
     """Return the session id for this launch.
 
-    If --resume <sid> or --resume=<sid> is in argv, return that sid.
+    Recognized sources (checked in order):
+      --resume <sid> / --resume=<sid> / -r <sid>
+      --session-id <sid> / --session-id=<sid>
     Otherwise generate a fresh uuid4 string.
     """
     for i, token in enumerate(argv):
-        if token == "--resume":
-            # next token is the sid (if present)
+        if token in _RESUME_FLAGS:
             if i + 1 < len(argv):
                 return argv[i + 1]
-            # `--resume` with no value -> behave as if no resume given
             continue
         if token.startswith("--resume="):
             return token.split("=", 1)[1]
+        if token == _SESSION_ID_FLAG:
+            if i + 1 < len(argv):
+                return argv[i + 1]
+            continue
+        if token.startswith("--session-id="):
+            return token.split("=", 1)[1]
     return str(uuid.uuid4())
+
+
+def needs_session_id_injection(argv: list[str]) -> bool:
+    """Return True when --session-id should be injected into claude argv.
+
+    False when the user already specified --resume, --continue, --session-id,
+    or their short forms (Claude Code determines its own session ID).
+    """
+    for token in argv:
+        if token in _RESUME_FLAGS | _CONTINUE_FLAGS | {_SESSION_ID_FLAG}:
+            return False
+        if token.startswith(("--resume=", "--session-id=")):
+            return False
+    return True
+
+
+def is_continue_mode(argv: list[str]) -> bool:
+    """Return True when --continue / -c is in argv."""
+    return bool(_CONTINUE_FLAGS & set(argv))
 
 
 def strip_no_tmux(argv: list[str]) -> list[str]:

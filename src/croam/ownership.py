@@ -42,6 +42,51 @@ def _parse_iso_utc(s: str) -> datetime:
     return dt.astimezone(UTC)
 
 
+def ensure_projects_symlink(state_root: Path, hostname: str, home: Path) -> None:
+    """Ensure ~/.claude/projects is a symlink into state_root/<hostname>/projects.
+
+    On first run, moves existing contents into the synced directory and
+    replaces the original with a symlink. Syncthing then replicates the
+    real files so peers can read transcripts offline.
+
+    Layout after migration:
+        state_root/<hostname>/projects/   (real dir, inside ~/Sync)
+        ~/.claude/projects -> state_root/<hostname>/projects/
+    """
+    real_dir = state_root / hostname / "projects"
+    claude_dir = home / ".claude" / "projects"
+
+    # Already correct.
+    if claude_dir.is_symlink() and claude_dir.resolve() == real_dir.resolve():
+        return
+
+    real_dir.mkdir(parents=True, exist_ok=True)
+
+    if claude_dir.is_symlink():
+        # Symlink pointing elsewhere; fix it.
+        claude_dir.unlink()
+    elif claude_dir.is_dir():
+        # First migration: move contents into synced dir, then replace with symlink.
+        import shutil
+
+        for child in claude_dir.iterdir():
+            dest = real_dir / child.name
+            if dest.exists():
+                if child.is_dir():
+                    shutil.rmtree(child)
+                else:
+                    child.unlink()
+            else:
+                shutil.move(str(child), str(dest))
+        claude_dir.rmdir()
+        logger.info("ensure_projects_symlink: migrated {} -> {}", claude_dir, real_dir)
+
+    # ~/.claude/ must exist for the symlink.
+    claude_dir.parent.mkdir(parents=True, exist_ok=True)
+    claude_dir.symlink_to(real_dir)
+    logger.info("ensure_projects_symlink: {} -> {}", claude_dir, real_dir)
+
+
 def _atomic_write_json(path: Path, payload: dict) -> None:  # type: ignore[type-arg]
     """Write payload to path atomically: tempfile -> fsync -> os.replace."""
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -223,3 +223,68 @@ def test_is_in_tmux_unset(home):
 
 def test_is_in_tmux_whitespace(home):
     assert shim.is_in_tmux({"TMUX": "  "}) is False
+
+
+# --- derive_sid: --session-id and -r support ---
+
+
+def test_derive_sid_session_id_space(home):
+    assert shim.derive_sid(["claude", "--session-id", "abc-123"], {}) == "abc-123"
+
+
+def test_derive_sid_session_id_equals(home):
+    assert shim.derive_sid(["claude", "--session-id=abc-123"], {}) == "abc-123"
+
+
+def test_derive_sid_short_resume(home):
+    assert shim.derive_sid(["claude", "-r", "abc-123"], {}) == "abc-123"
+
+
+# --- needs_session_id_injection ---
+
+
+def test_needs_injection_new_session(home):
+    assert shim.needs_session_id_injection(["claude", "--effort", "max"]) is True
+
+
+def test_needs_injection_resume_long(home):
+    assert shim.needs_session_id_injection(["claude", "--resume", "abc"]) is False
+
+
+def test_needs_injection_resume_short(home):
+    assert shim.needs_session_id_injection(["claude", "-r", "abc"]) is False
+
+
+def test_needs_injection_resume_equals(home):
+    assert shim.needs_session_id_injection(["claude", "--resume=abc"]) is False
+
+
+def test_needs_injection_continue_long(home):
+    assert shim.needs_session_id_injection(["claude", "--continue"]) is False
+
+
+def test_needs_injection_continue_short(home):
+    assert shim.needs_session_id_injection(["claude", "-c"]) is False
+
+
+def test_needs_injection_session_id_already(home):
+    assert shim.needs_session_id_injection(["claude", "--session-id", "abc"]) is False
+
+
+def test_needs_injection_session_id_equals(home):
+    assert shim.needs_session_id_injection(["claude", "--session-id=abc"]) is False
+
+
+# --- is_continue_mode ---
+
+
+def test_is_continue_long(home):
+    assert shim.is_continue_mode(["claude", "--continue"]) is True
+
+
+def test_is_continue_short(home):
+    assert shim.is_continue_mode(["claude", "-c"]) is True
+
+
+def test_is_continue_absent(home):
+    assert shim.is_continue_mode(["claude", "--effort", "max"]) is False

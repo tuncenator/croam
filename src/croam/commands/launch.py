@@ -48,6 +48,16 @@ class LaunchPlan:
     passthrough_argv: list[str] | None = None
 
 
+def _resolve_continue_sid(cwd: Path, home: Path) -> str | None:
+    """Find the most recent session SID matching the given cwd for --continue."""
+    from croam.sessions import discover_local_sessions
+
+    for s in discover_local_sessions(home):
+        if s.cwd == cwd:
+            return s.sid
+    return None
+
+
 def build_launch_plan(
     argv: list[str],
     env: dict[str, str],
@@ -76,8 +86,17 @@ def build_launch_plan(
     in_tmux = shim.is_in_tmux(env)
     sid = shim.derive_sid(argv, env)
     cleaned_argv = shim.strip_no_tmux(argv)
-    # Replace argv[0] with the resolved binary path so subprocess/exec uses it.
-    claude_argv = [str(claude_real), *cleaned_argv[1:]]
+
+    if shim.is_continue_mode(argv):
+        resolved = _resolve_continue_sid(cwd, home)
+        if resolved is not None:
+            sid = resolved
+
+    if shim.needs_session_id_injection(argv):
+        claude_argv = [str(claude_real), "--session-id", sid, *cleaned_argv[1:]]
+    else:
+        claude_argv = [str(claude_real), *cleaned_argv[1:]]
+
     cwd_normalized = normalize_cwd(cwd, home)
 
     if not config.shim.enabled or not shim.should_wrap(

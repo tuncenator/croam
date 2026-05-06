@@ -15,12 +15,12 @@ from loguru import logger
 from croam.transcript import _extract_text
 
 _TAIL_TYPES = {"user", "assistant"}
+_MAX_LINES_PER_MSG = 8
 
 
 def extract_conversation_tail(
     jsonl_path: Path,
-    n: int = 10,
-    max_msg_chars: int = 200,
+    n: int = 20,
 ) -> list[tuple[str, str]]:
     """Return the last *n* user/assistant messages from a JSONL transcript."""
     try:
@@ -28,22 +28,20 @@ def extract_conversation_tail(
     except OSError as exc:
         logger.debug("extract_conversation_tail: cannot read {}: {}", jsonl_path, exc)
         return []
-    return _parse_tail(raw, n, max_msg_chars)
+    return _parse_tail(raw, n)
 
 
 def _extract_tail_from_text(
     raw: str,
-    n: int = 10,
-    max_msg_chars: int = 200,
+    n: int = 20,
 ) -> list[tuple[str, str]]:
     """Parse conversation tail from raw JSONL text (local or SSH-fetched)."""
-    return _parse_tail(raw, n, max_msg_chars)
+    return _parse_tail(raw, n)
 
 
 def _parse_tail(
     raw: str,
     n: int,
-    max_msg_chars: int,
 ) -> list[tuple[str, str]]:
     messages: list[tuple[str, str]] = []
     for line in raw.splitlines():
@@ -60,8 +58,10 @@ def _parse_tail(
         if msg_type not in _TAIL_TYPES:
             continue
         text = _extract_text(obj.get("message", "")).strip()
-        if len(text) > max_msg_chars:
-            text = text[:max_msg_chars] + "..."
+        if not text:
+            continue
+        if msg_type == "user" and text.startswith("<"):
+            continue
         messages.append((msg_type, text))
     return messages[-n:]
 
@@ -141,7 +141,7 @@ def _read_remote_transcript(
     from croam import proc
     from croam.errors import TimeoutError as CroamTimeoutError
 
-    cmd = f'f=$(find ~/.claude/projects -name "{sid}.jsonl" -print -quit 2>/dev/null) && [ -n "$f" ] && cat "$f"'
+    cmd = f'f=$(find -L ~/.claude/projects -name "{sid}.jsonl" -print -quit 2>/dev/null) && [ -n "$f" ] && cat "$f"'
     argv = [
         "ssh",
         "-o", "ConnectTimeout=2",
@@ -185,13 +185,62 @@ def _derive_actions(status: str, cwd_exists: bool) -> list[str]:
 
 
 def _format_tail(tail: list[tuple[str, str]]) -> list[str]:
-    """Format conversation tail tuples into display lines."""
+    """Format conversation tail with visual hierarchy.
+
+    User messages prefixed with ``>>> ``, assistant messages indented with
+    ``    ``.  Up to 8 lines per message; overflow shows a count.
+    """
     if not tail:
         return ["", "(no messages)"]
     lines = ["", f"--- last {len(tail)} messages ---", ""]
     for role, text in tail:
-        lines.append(f"[{role}] {text}")
+        prefix = ">>> " if role == "user" else "    "
+        msg_lines = text.split("\n")
+        for i, ml in enumerate(msg_lines[:_MAX_LINES_PER_MSG]):
+            if i == 0:
+                lines.append(f"{prefix}{ml}")
+            else:
+                lines.append(f"    {ml}")
+        overflow = len(msg_lines) - _MAX_LINES_PER_MSG
+        if overflow > 0:
+            lines.append(f"    ... ({overflow} more lines)")
+        lines.append("")
     return lines
+
+
+def _try_mirror_transcript(
+    sid: str,
+    owner: str,
+    cwd_normalized: str,
+    config: object | None,
+    home: Path,
+    state_root: Path,
+) -> list[tuple[str, str]] | None:
+    """Try reading a transcript from the syncthing mirror directory.
+
+    Returns parsed tail or None if no mirror exists.
+    """
+    from croam.config import Config
+    from croam.paths import denormalize_cwd, encode_cwd
+
+    owner_home = home
+    if isinstance(config, Config):
+        host_entry = config.hosts.get(owner)
+        if host_entry is not None and host_entry.home is not None:
+            owner_home = host_entry.home
+
+    try:
+        cwd_abs = denormalize_cwd(cwd_normalized, owner_home)
+        encoded = encode_cwd(cwd_abs)
+    except (ValueError, Exception) as exc:
+        logger.debug("_try_mirror_transcript: path resolution failed: {}", exc)
+        return None
+
+    mirror_path = state_root / owner / "projects" / encoded / f"{sid}.jsonl"
+    if not mirror_path.exists():
+        return None
+
+    return extract_conversation_tail(mirror_path)
 
 
 # ---------------------------------------------------------------------------
@@ -244,7 +293,16 @@ def render_preview(sid: str, home: Path) -> str:
         f"Actions: {', '.join(actions)}",
     ]
 
-    # Try fetching transcript from remote host.
+    # If owner is this host, the transcript simply doesn't exist locally.
+    self_hostname = config.self_hostname if config else None
+    is_local_owner = self_hostname is not None and owner == self_hostname
+
+    if is_local_owner:
+        lines.append("")
+        lines.append("(no transcript)")
+        return "\n".join(lines)
+
+    # Remote owner: try SSH, then syncthing mirror.
     ssh_alias = _resolve_ssh_alias(owner, config)
     if ssh_alias is not None:
         raw = _read_remote_transcript(sid, ssh_alias)
@@ -252,6 +310,11 @@ def render_preview(sid: str, home: Path) -> str:
             tail = _extract_tail_from_text(raw)
             lines.extend(_format_tail(tail))
             return "\n".join(lines)
+
+    mirror_tail = _try_mirror_transcript(sid, owner, cwd_normalized, config, home, state_root)
+    if mirror_tail is not None:
+        lines.extend(_format_tail(mirror_tail))
+        return "\n".join(lines)
 
     lines.append("")
     lines.append(f"(transcript on {owner}, not reachable)")

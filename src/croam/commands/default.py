@@ -22,6 +22,11 @@ def run_picker(*, config: Config, home: Path, ctx_obj: dict) -> int:
 
     Phase 6 ships discover + render + launch. Phase 7 fills in the dispatch table.
     """
+    # 0. Ensure transcript symlink for syncthing mirror.
+    from croam.ownership import ensure_projects_symlink
+
+    ensure_projects_symlink(config.storage.state_root, config.self_hostname, home)
+
     # 1. Discover.
     sessions = discover_local_sessions(home)
     assertions_per_host = read_all_assertions(config.storage.state_root)

@@ -72,7 +72,7 @@ def test_build_launch_plan_wrap_path(home, tmp_path, monkeypatch):
         "--",
     ]
     assert plan.tmux_new_argv[6] == str(fake_claude)
-    assert plan.tmux_new_argv[7:] == ["--effort", "max"]
+    assert plan.tmux_new_argv[7:] == ["--session-id", plan.sid, "--effort", "max"]
     assert plan.tmux_attach_argv == ["tmux", "attach", "-t", f"claude-{plan.sid}"]
 
 
@@ -90,7 +90,8 @@ def test_build_launch_plan_passthrough_in_tmux(home, tmp_path, monkeypatch):
         config=config,
     )
     assert plan.mode == "passthrough"
-    assert plan.passthrough_argv == [str(fake_claude)]
+    # --session-id injected even in passthrough (ownership must match)
+    assert plan.passthrough_argv == [str(fake_claude), "--session-id", plan.sid]
     assert plan.tmux_new_argv is None
 
 
@@ -107,6 +108,7 @@ def test_build_launch_plan_passthrough_print_flag(home, tmp_path, monkeypatch):
         config=config,
     )
     assert plan.mode == "passthrough"
+    assert plan.passthrough_argv == [str(fake_claude), "--session-id", plan.sid, "--print", "say hi"]
 
 
 def test_build_launch_plan_resume_uses_provided_sid(home, tmp_path, monkeypatch):
@@ -123,6 +125,8 @@ def test_build_launch_plan_resume_uses_provided_sid(home, tmp_path, monkeypatch)
     )
     assert plan.sid == "ff7afd8a-ea17-4183-a131-566e7bcb0758"
     assert plan.tmux_session_name == "claude-ff7afd8a-ea17-4183-a131-566e7bcb0758"
+    # --session-id must NOT be injected for --resume
+    assert "--session-id" not in plan.claude_argv
 
 
 def test_build_launch_plan_strips_no_tmux(home, tmp_path, monkeypatch):
@@ -140,7 +144,49 @@ def test_build_launch_plan_strips_no_tmux(home, tmp_path, monkeypatch):
     )
     assert plan.mode == "passthrough"
     assert "--no-tmux" not in (plan.passthrough_argv or [])
-    assert plan.passthrough_argv == [str(fake_claude), "--effort", "max"]
+    assert plan.passthrough_argv == [str(fake_claude), "--session-id", plan.sid, "--effort", "max"]
+
+
+def test_build_launch_plan_continue_resolves_sid(home, tmp_path, monkeypatch):
+    """--continue resolves the SID from the most recent local session."""
+    fake_claude = _make_fake_claude(tmp_path)
+    monkeypatch.setenv("PATH", str(fake_claude.parent))
+
+    from croam.paths import encode_cwd
+
+    encoded = encode_cwd(home)
+    projects_dir = home / ".claude" / "projects" / encoded
+    projects_dir.mkdir(parents=True)
+    (projects_dir / "existing-sid.jsonl").write_text('{"type":"user","message":"hi"}\n')
+
+    config = _make_config(home=home, state_root=tmp_path / "state")
+    plan = build_launch_plan(
+        argv=["claude", "--continue"],
+        env={"HOME": str(home)},
+        stdin_isatty=True,
+        cwd=home,
+        home=home,
+        config=config,
+    )
+    assert plan.sid == "existing-sid"
+    assert "--session-id" not in plan.claude_argv
+
+
+def test_build_launch_plan_continue_no_match_generates_uuid(home, tmp_path, monkeypatch):
+    """--continue with no matching local session falls back to uuid4."""
+    fake_claude = _make_fake_claude(tmp_path)
+    monkeypatch.setenv("PATH", str(fake_claude.parent))
+    config = _make_config(home=home, state_root=tmp_path / "state")
+    plan = build_launch_plan(
+        argv=["claude", "--continue"],
+        env={"HOME": str(home)},
+        stdin_isatty=True,
+        cwd=home,
+        home=home,
+        config=config,
+    )
+    uuid.UUID(plan.sid)  # still a valid UUID
+    assert "--session-id" not in plan.claude_argv
 
 
 def test_launch_cmd_no_exec_writes_assertion(home, tmp_path, capsys, monkeypatch):
