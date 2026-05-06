@@ -159,10 +159,10 @@ def test_format_input_lines_exact_shape(home):
     out = format_input_lines(rows)
     expected = (
         f"abc12345-aaaa-bbbb-cccc-111111111111\t{green_filled}\trunning-idle\t"
-        "reachable\tpresent\tstormtree\t2m\t~/Programs/onlayer-x\t"
+        "reachable\tpresent\tstormtree\t2m\t~/Programs/onlayer-x \t"
         "iso27001 controls draft\n"
         f"def45678-2222-3333-4444-555555555555\t{dim_open}\tunreachable\t"
-        "unreachable\tmissing-cwd\tvicar\t1d\t/home/work/onlayer-eu\t"
+        "unreachable\tmissing-cwd\tvicar    \t1d\t/home/work/onlayer-eu\t"
         "refactor mart_*\n"
     )
     assert out == expected

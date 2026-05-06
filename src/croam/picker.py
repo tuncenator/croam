@@ -301,9 +301,16 @@ def _resolve_cwd(cwd_normalized: str, host_homes: dict[str, Path] | None) -> Pat
 
 
 def format_input_lines(rows: list[PickerRow]) -> str:
-    """Tab-join columns and newline-terminate for fzf stdin."""
+    """Tab-join columns and newline-terminate for fzf stdin.
+
+    Displayed columns (host, last, cwd_display) are left-padded to their max
+    width so columns stay aligned regardless of hostname length.
+    """
     if not rows:
         return ""
+    host_w = max(len(_scrub(r.host)) for r in rows)
+    last_w = max(len(_scrub(r.last)) for r in rows)
+    cwd_w = max(len(_scrub(r.cwd_display)) for r in rows)
     lines = []
     for r in rows:
         cols = [
@@ -312,9 +319,9 @@ def format_input_lines(rows: list[PickerRow]) -> str:
             _scrub(r.status_word),
             _scrub(r.reach_word),
             _scrub(r.cwd_word),
-            _scrub(r.host),
-            _scrub(r.last),
-            _scrub(r.cwd_display),
+            _scrub(r.host).ljust(host_w),
+            _scrub(r.last).rjust(last_w),
+            _scrub(r.cwd_display).ljust(cwd_w),
             _scrub(r.name),
         ]
         lines.append("\t".join(cols))
